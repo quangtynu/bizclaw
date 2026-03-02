@@ -160,8 +160,25 @@ impl PgDb {
                 BizClawError::Memory(format!("PG migration error: {e}"))
             })
             .ok();
+
+        // Enterprise migration — RBAC, Handoff, Analytics, Quota
+        let enterprise_sql = include_str!("../../../migrations/002_enterprise.sql");
+        sqlx::raw_sql(enterprise_sql)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("already exists") || msg.contains("duplicate key") {
+                    tracing::debug!("PG enterprise migration: already applied");
+                    return BizClawError::Memory("OK".into());
+                }
+                BizClawError::Memory(format!("PG enterprise migration error: {e}"))
+            })
+            .ok();
+
         Ok(())
     }
+
 
 
     /// Get the underlying pool (for direct queries).

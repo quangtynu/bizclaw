@@ -10,10 +10,12 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod db_pg;
+pub mod enterprise;
 pub mod tenant;
 pub mod self_serve;
 
 pub use admin::AdminServer;
 pub use db::PlatformDb;
 pub use db_pg::PgDb;
+pub use enterprise::{TenantRole, TenantMember, TenantInvitation, HandoffSession, HandoffMessage, AnalyticsSummary, QuotaStatus};
 pub use tenant::TenantManager;

@@ -161,6 +161,26 @@ async fn main() -> Result<()> {
         }
     };
 
+    // Connect PostgreSQL for enterprise features (optional — falls back gracefully)
+    let pg_db = match std::env::var("DATABASE_URL").or_else(|_| std::env::var("BIZCLAW_PG_URL")) {
+        Ok(url) if !url.is_empty() => {
+            match bizclaw_platform::PgDb::connect_with_url(&url).await {
+                Ok(pg) => {
+                    tracing::info!("🐘 PostgreSQL connected — enterprise features enabled");
+                    Some(pg)
+                }
+                Err(e) => {
+                    tracing::warn!("⚠️  PostgreSQL connect failed: {e} — enterprise features disabled");
+                    None
+                }
+            }
+        }
+        _ => {
+            tracing::info!("ℹ️  DATABASE_URL not set — enterprise features disabled (SQLite only mode)");
+            None
+        }
+    };
+
     // Build admin state
     let state = Arc::new(bizclaw_platform::admin::AdminState {
         db: tokio::sync::Mutex::new(db),
@@ -171,7 +191,9 @@ async fn main() -> Result<()> {
         domain: cli.domain.clone(),
         login_attempts: std::sync::Mutex::new(std::collections::HashMap::new()),
         register_attempts: std::sync::Mutex::new(std::collections::HashMap::new()),
+        pg_db,
     });
+
 
     // Start server
     println!("🏢 BizClaw Platform v{}", env!("CARGO_PKG_VERSION"));

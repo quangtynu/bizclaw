@@ -29,6 +29,9 @@ pub struct AdminState {
     pub login_attempts: std::sync::Mutex<std::collections::HashMap<String, (u32, std::time::Instant)>>,
     /// Rate limiter for registration: email → (attempt_count, first_attempt_time)
     pub register_attempts: std::sync::Mutex<std::collections::HashMap<String, (u32, std::time::Instant)>>,
+    /// PostgreSQL DB for enterprise features (optional — only when DATABASE_URL is set).
+    /// Falls back gracefully: enterprise endpoints return 503 if None.
+    pub pg_db: Option<crate::db_pg::PgDb>,
 }
 
 /// JWT auth middleware — validates Authorization: Bearer <token>.
@@ -115,16 +118,35 @@ impl AdminServer {
             .route("/api/admin/users/{id}/role", put(update_user_role_handler))
             // Profile
             .route("/api/admin/users/me/password", put(crate::self_serve::change_password_handler))
+            // ── ENTERPRISE: Multi-user RBAC per Tenant ─────────────────────
+            .route("/api/admin/tenants/{id}/members", get(list_members))
+            .route("/api/admin/tenants/{id}/members/invite", post(invite_member))
+            .route("/api/admin/tenants/{id}/members/{uid}/role", put(update_member_role))
+            .route("/api/admin/tenants/{id}/members/{uid}", delete(remove_member))
+            // ── ENTERPRISE: Human Handoff ───────────────────────────────────
+            .route("/api/admin/tenants/{id}/handoffs", get(list_handoffs))
+            .route("/api/admin/tenants/{id}/handoffs/{hid}/claim", post(claim_handoff))
+            .route("/api/admin/tenants/{id}/handoffs/{hid}/reply", post(reply_handoff))
+            .route("/api/admin/tenants/{id}/handoffs/{hid}/resolve", post(resolve_handoff))
+            .route("/api/admin/tenants/{id}/handoffs/{hid}/messages", get(list_handoff_messages))
+            // ── ENTERPRISE: BI Analytics ────────────────────────────────────
+            .route("/api/admin/tenants/{id}/analytics/summary", get(analytics_summary))
+            .route("/api/admin/tenants/{id}/analytics/tokens", get(analytics_tokens))
+            // ── ENTERPRISE: Budget Quota Control ───────────────────────────
+            .route("/api/admin/tenants/{id}/quotas", get(list_quotas))
+            .route("/api/admin/tenants/{id}/quotas/{resource}", put(set_quota))
             .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
-        // Public routes — no auth required
+        // Public routes — including invitation acceptance
         let public = Router::new()
             .route("/api/admin/login", post(login))
             .route("/api/admin/pairing/validate", post(validate_pairing))
             .route("/api/admin/register", post(crate::self_serve::register_handler))
             .route("/api/admin/password-reset", post(crate::self_serve::forgot_password_handler))
             .route("/api/admin/password-reset/confirm", post(crate::self_serve::reset_password_handler))
+            .route("/api/admin/invitations/{token}/accept", post(accept_invitation))
             .route("/", get(admin_dashboard_page));
+
 
         // SPA fallback — serve dashboard HTML for all non-API paths
         // so that /tenants, /settings, /ollama etc. all work
@@ -1629,5 +1651,291 @@ async fn update_user_role_handler(
             Json(serde_json::json!({"ok": true}))
         }
         Err(e) => internal_error("admin", e),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ENTERPRISE HANDLERS: Multi-user RBAC
+// ════════════════════════════════════════════════════════════════════
+
+async fn list_members(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền truy cập."}));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.list_tenant_members(&id).await {
+            Ok(members) => Json(serde_json::json!({"ok": true, "members": members})),
+            Err(e) => internal_error("list_members", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required for enterprise features"})),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct InviteMemberReq { email: String, role: String }
+
+async fn invite_member(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+    Json(req): Json<InviteMemberReq>,
+) -> Json<serde_json::Value> {
+    if !can_write_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền mời thành viên."}));
+    }
+    let valid_roles = ["owner", "admin", "operator", "viewer"];
+    if !valid_roles.contains(&req.role.as_str()) {
+        return Json(serde_json::json!({"ok": false, "error": "Role không hợp lệ. Phải là: owner, admin, operator, viewer"}));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.create_invitation(&id, &req.email, &req.role, &claims.sub, 72).await {
+            Ok(inv) => {
+                let base_url = std::env::var("BIZCLAW_BASE_URL").unwrap_or_else(|_| "https://app.bizclaw.vn".into());
+                let invite_url = format!("{base_url}/api/admin/invitations/{}/accept", inv.token);
+                Json(serde_json::json!({
+                    "ok": true,
+                    "invitation_token": inv.token,
+                    "invitation_url": invite_url,
+                    "expires_in_hours": 72,
+                }))
+            }
+            Err(e) => internal_error("invite_member", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct UpdateMemberRoleReq { role: String }
+
+async fn update_member_role(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((id, uid)): Path<(String, String)>,
+    Json(req): Json<UpdateMemberRoleReq>,
+) -> Json<serde_json::Value> {
+    if !can_write_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền."}));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.add_tenant_member(&id, &uid, &req.role, None).await {
+            Ok(()) => Json(serde_json::json!({"ok": true})),
+            Err(e) => internal_error("update_member_role", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+async fn remove_member(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((id, uid)): Path<(String, String)>,
+) -> Json<serde_json::Value> {
+    if !can_write_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền."}));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.remove_tenant_member(&id, &uid).await {
+            Ok(()) => Json(serde_json::json!({"ok": true})),
+            Err(e) => internal_error("remove_member", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct AcceptInvitationReq { user_id: String }
+
+async fn accept_invitation(
+    State(state): State<Arc<AdminState>>,
+    Path(token): Path<String>,
+    Json(req): Json<AcceptInvitationReq>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.accept_invitation(&token, &req.user_id).await {
+            Ok((tenant_id, role)) => Json(serde_json::json!({
+                "ok": true, "tenant_id": tenant_id, "role": role,
+            })),
+            Err(e) => internal_error("accept_invitation", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ENTERPRISE HANDLERS: Human Handoff
+// ════════════════════════════════════════════════════════════════════
+
+async fn list_handoffs(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền."}));
+    }
+    let status = params.get("status").map(|s| s.as_str());
+    match &state.pg_db {
+        Some(pg) => match pg.list_handoffs(&id, status).await {
+            Ok(handoffs) => Json(serde_json::json!({"ok": true, "handoffs": handoffs})),
+            Err(e) => internal_error("list_handoffs", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+async fn claim_handoff(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((_id, hid)): Path<(String, String)>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.claim_handoff(&hid, &claims.sub).await {
+            Ok(()) => Json(serde_json::json!({"ok": true, "message": "Bạn đã nhận case này"})),
+            Err(e) => internal_error("claim_handoff", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct HandoffReplyReq { content: String }
+
+async fn reply_handoff(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((_id, hid)): Path<(String, String)>,
+    Json(req): Json<HandoffReplyReq>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.add_handoff_message(&hid, "operator", Some(&claims.sub), &req.content).await {
+            Ok(msg) => Json(serde_json::json!({"ok": true, "message": msg})),
+            Err(e) => internal_error("reply_handoff", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+async fn resolve_handoff(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((_id, hid)): Path<(String, String)>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.resolve_handoff(&hid, &claims.sub).await {
+            Ok(()) => Json(serde_json::json!({"ok": true, "message": "Case đã được đóng"})),
+            Err(e) => internal_error("resolve_handoff", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+async fn list_handoff_messages(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((id, hid)): Path<(String, String)>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền."}));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.list_handoff_messages(&hid).await {
+            Ok(msgs) => Json(serde_json::json!({"ok": true, "messages": msgs})),
+            Err(e) => internal_error("list_handoff_messages", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ENTERPRISE HANDLERS: BI Analytics
+// ════════════════════════════════════════════════════════════════════
+
+async fn analytics_summary(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền."}));
+    }
+    let days: i32 = params.get("days").and_then(|d| d.parse().ok()).unwrap_or(30);
+    match &state.pg_db {
+        Some(pg) => match pg.get_analytics_summary(&id, days).await {
+            Ok(summary) => Json(serde_json::json!({"ok": true, "period_days": days, "summary": summary})),
+            Err(e) => internal_error("analytics_summary", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+async fn analytics_tokens(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền."}));
+    }
+    let days: i32 = params.get("days").and_then(|d| d.parse().ok()).unwrap_or(30);
+    match &state.pg_db {
+        Some(pg) => match pg.get_token_usage_by_day(&id, days).await {
+            Ok(usage) => Json(serde_json::json!({"ok": true, "period_days": days, "usage": usage})),
+            Err(e) => internal_error("analytics_tokens", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ENTERPRISE HANDLERS: Budget Quota
+// ════════════════════════════════════════════════════════════════════
+
+async fn list_quotas(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Không có quyền."}));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.get_quota_status(&id).await {
+            Ok(quotas) => Json(serde_json::json!({"ok": true, "quotas": quotas})),
+            Err(e) => internal_error("list_quotas", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct SetQuotaReq { limit_value: i64 }
+
+async fn set_quota(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((id, resource)): Path<(String, String)>,
+    Json(req): Json<SetQuotaReq>,
+) -> Json<serde_json::Value> {
+    if !is_super_admin(&claims) && !can_write_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({"ok": false, "error": "Chỉ Admin mới có thể thay đổi quota."}));
+    }
+    let valid = ["tokens_per_month", "messages_per_day", "handoffs_per_month"];
+    if !valid.contains(&resource.as_str()) {
+        return Json(serde_json::json!({"ok": false, "error": "Resource không hợp lệ."}));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.set_quota(&id, &resource, req.limit_value).await {
+            Ok(()) => Json(serde_json::json!({"ok": true, "resource": resource, "limit": req.limit_value})),
+            Err(e) => internal_error("set_quota", e),
+        },
+        None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
     }
 }
