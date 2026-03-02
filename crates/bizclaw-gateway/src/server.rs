@@ -434,7 +434,7 @@ pub fn build_router_from_arc(shared: Arc<AppState>) -> Router {
     let public = Router::new()
         .route("/", get(dashboard_page))
         .route("/legacy", get(legacy_dashboard_page))
-        .route("/static/dashboard/*path", get(dashboard_static))
+        .route("/static/dashboard/{*path}", get(dashboard_static))
         .route("/health", get(super::routes::health_check))
         .route("/api/v1/verify-pairing", post(verify_pairing))
         // WhatsApp webhook — must be public for Meta verification
