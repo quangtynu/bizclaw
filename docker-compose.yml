@@ -1,16 +1,38 @@
 # ═══════════════════════════════════════════════════════════════
-# BizClaw AI Agent Platform — Docker Compose
+# BizClaw Platform — Docker Compose (Dev + PG Mode)
 # Usage: docker-compose up -d
-# Dashboard: http://localhost:3001
+# Dashboard:  http://localhost:3001
+# PostgreSQL: localhost:5432
 # ═══════════════════════════════════════════════════════════════
 
 version: '3.8'
 
 services:
+
+  # ── PostgreSQL 16 ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: bizclaw-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       bizclaw
+      POSTGRES_USER:     bizclaw
+      POSTGRES_PASSWORD: BizClaw@2026DB
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro   # auto-run on first boot
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bizclaw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── BizClaw Platform ─────────────────────────────────────────
   bizclaw:
     build: .
-    # Or use pre-built image:
-    # image: bizclaw/bizclaw:latest
     container_name: bizclaw
     restart: unless-stopped
     ports:
@@ -18,22 +40,30 @@ services:
       - "10001:10001"   # Tenant 1 gateway
       - "10002:10002"   # Tenant 2 gateway
       - "10003:10003"   # Tenant 3 gateway
+      - "10004:10004"   # Tenant 4 gateway
+      - "10005:10005"   # Tenant 5 gateway
     volumes:
       - bizclaw_data:/root/.bizclaw
     environment:
       - RUST_LOG=info
       - BIZCLAW_CONFIG=/root/.bizclaw/config.toml
-      # Optional: set JWT secret for admin API
-      # - BIZCLAW_JWT_SECRET=your-secret-here
-      # Optional: pair CORS origins
+      - BIZCLAW_BIND_ALL=1
+      - DATABASE_URL=postgres://bizclaw:BizClaw@2026DB@postgres:5432/bizclaw
+      - TZ=Asia/Ho_Chi_Minh
+      # Uncomment to set a persistent JWT secret:
+      # - JWT_SECRET=your-64-char-random-secret-here
+      # Uncomment to restrict CORS:
       # - BIZCLAW_CORS_ORIGINS=https://yourdomain.com
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 5s
       retries: 3
 
-  # Optional: Ollama for local AI (no API key needed)
+  # ── Ollama (optional — local AI) ─────────────────────────────
   ollama:
     image: ollama/ollama:latest
     container_name: bizclaw-ollama
@@ -50,6 +80,8 @@ services:
     #         - capabilities: [gpu]
 
 volumes:
+  pg_data:
+    driver: local
   bizclaw_data:
     driver: local
   ollama_data:
