@@ -616,10 +616,10 @@ function HandsPage({ lang }) {
       <div class="sub">7 tay tự trị chạy 24/7 — lấy cảm hứng từ kiến trúc Agent OS</div>
     </div></div>
     <div class="stats">
-      <\${StatsCard} label="Total Hands" value=${hands.length} color="accent" icon="🤚" />
-      <\${StatsCard} label="Active" value=${Object.values(enabled).filter(Boolean).length} color="green" icon="▶" />
-      <\${StatsCard} label="Total Runs" value="0" color="blue" icon="🔁" />
-      <\${StatsCard} label="Total Cost" value="$0.00" color="orange" icon="💰" />
+      <${StatsCard} label="Total Hands" value=${hands.length} color="accent" icon="🤚" />
+      <${StatsCard} label="Active" value=${Object.values(enabled).filter(Boolean).length} color="green" icon="▶" />
+      <${StatsCard} label="Total Runs" value="0" color="blue" icon="🔁" />
+      <${StatsCard} label="Total Cost" value="$0.00" color="orange" icon="💰" />
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
       ${hands.map(h => html`<div class="card" key=${h.name} style="border-left:3px solid ${enabled[h.name]?'var(--green)':'var(--text2)'}">
@@ -683,8 +683,8 @@ function ProvidersPage({ config, lang }) {
   return html`<div>
     <div class="page-header"><div><h1>🔌 ${t('providers.title',lang)}</h1><div class="sub">${t('providers.subtitle',lang)}</div></div></div>
     <div class="stats">
-      <\${StatsCard} label=${t('providers.active_label',lang)} value=${active||'—'} color="green" icon="⚡" />
-      <\${StatsCard} label=${t('providers.total_label',lang)} value=${providers.length} color="accent" icon="🔌" />
+      <${StatsCard} label=${t('providers.active_label',lang)} value=${active||'—'} color="green" icon="⚡" />
+      <${StatsCard} label=${t('providers.total_label',lang)} value=${providers.length} color="accent" icon="🔌" />
     </div>
     <div class="card">${loading?html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>`:html`<table><thead><tr><th></th><th>Provider</th><th>Type</th><th>Models</th><th>Status</th><th></th></tr></thead><tbody>
       ${providers.map(p=>html`<tr key=${p.name}><td style="font-size:20px">${p.icon||'🤖'}</td><td><strong>${p.label||p.name}</strong></td><td><span class="badge ${typeColor(p.provider_type)}">${p.provider_type}</span></td><td style="font-size:12px">${(p.models||[]).slice(0,3).join(', ')}</td><td>${p.name===active?html`<span class="badge badge-green">✅ Active</span>`:html`<span class="badge">—</span>`}</td><td><button class="btn btn-outline btn-sm" onClick=${()=>window.showToast&&window.showToast('Provider '+p.name+' activated','success')}>⚡</button></td></tr>`)}
@@ -709,9 +709,9 @@ function ChannelsPage({ lang }) {
   return html`<div>
     <div class="page-header"><div><h1>📱 ${t('channels.title',lang)}</h1><div class="sub">${t('channels.subtitle',lang)} — 25+ nền tảng</div></div></div>
     <div class="stats">
-      <\${StatsCard} label="Total Channels" value=${channels.length} color="accent" />
-      <\${StatsCard} label="Active" value=${channels.filter(c=>c.status==='active').length} color="green" />
-      <\${StatsCard} label="Configured" value=${channels.filter(c=>c.status==='configured').length} color="blue" />
+      <${StatsCard} label="Total Channels" value=${channels.length} color="accent" />
+      <${StatsCard} label="Active" value=${channels.filter(c=>c.status==='active').length} color="green" />
+      <${StatsCard} label="Configured" value=${channels.filter(c=>c.status==='configured').length} color="blue" />
     </div>
     <div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
       ${channels.map(c=>html`<div key=${c.name} style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
@@ -736,7 +736,7 @@ function ToolsPage({ lang }) {
   ];
   return html`<div>
     <div class="page-header"><div><h1>🛠️ ${t('tools.title',lang)}</h1><div class="sub">${t('tools.subtitle',lang)}</div></div></div>
-    <div class="stats"><\${StatsCard} label="Native Tools" value=${tools.length} color="accent" icon="🛠️" /><\${StatsCard} label="MCP Tools" value="∞" color="blue" icon="🔗" /></div>
+    <div class="stats"><${StatsCard} label="Native Tools" value=${tools.length} color="accent" icon="🛠️" /><${StatsCard} label="MCP Tools" value="∞" color="blue" icon="🔗" /></div>
     <div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
       ${tools.map(t=>html`<div key=${t.name} style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
         <span style="font-size:24px">${t.icon}</span>
@@ -753,7 +753,7 @@ function AgentsPage({ config, lang }) {
   useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/agents');const d=await r.json();setAgents(d.agents||[]);}catch(e){}})(); },[]);
   return html`<div>
     <div class="page-header"><div><h1>🤖 ${t('agents.title',lang)}</h1><div class="sub">${t('agents.subtitle',lang)}</div></div></div>
-    <div class="stats"><\${StatsCard} label=${t('agents.total',lang)} value=${agents.length||1} color="accent" icon="🤖" /></div>
+    <div class="stats"><${StatsCard} label=${t('agents.total',lang)} value=${agents.length||1} color="accent" icon="🤖" /></div>
     <div class="card">${agents.length===0?html`<div style="text-align:center;padding:30px;color:var(--text2)"><div style="font-size:48px;margin-bottom:12px">🤖</div><p>Default agent: <strong>${config?.agent_name||'BizClaw'}</strong></p><p style="margin-top:8px">Provider: <span class="badge badge-blue">${config?.default_provider||'—'}</span></p></div>`:html`<table><thead><tr><th>Agent</th><th>Provider</th><th>Model</th><th>Messages</th><th>Status</th></tr></thead><tbody>${agents.map(a=>html`<tr key=${a.id}><td><strong>${a.name}</strong></td><td>${a.provider}</td><td><span class="badge badge-blue">${a.model}</span></td><td>${a.message_count||0}</td><td><span class="badge badge-green">Active</span></td></tr>`)}</tbody></table>`}</div>
   </div>`;
 }
@@ -764,7 +764,7 @@ function KnowledgePage({ lang }) {
   useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/knowledge/documents');const d=await r.json();setDocs(d.documents||[]);}catch(e){}})(); },[]);
   return html`<div>
     <div class="page-header"><div><h1>📚 ${t('kb.title',lang)}</h1><div class="sub">${t('kb.subtitle',lang)}</div></div></div>
-    <div class="stats"><\${StatsCard} label=${t('kb.documents',lang)} value=${docs.length} color="accent" icon="📄" /><\${StatsCard} label=${t('kb.chunks',lang)} value=${docs.reduce((s,d)=>s+(d.chunks||0),0)} color="blue" icon="📝" /></div>
+    <div class="stats"><${StatsCard} label=${t('kb.documents',lang)} value=${docs.length} color="accent" icon="📄" /><${StatsCard} label=${t('kb.chunks',lang)} value=${docs.reduce((s,d)=>s+(d.chunks||0),0)} color="blue" icon="📝" /></div>
     <div class="card">${docs.length===0?html`<div style="text-align:center;padding:40px;color:var(--text2)"><div style="font-size:48px;margin-bottom:12px">📚</div><p>Chưa có tài liệu. Thêm file MD, PDF, TXT để AI trả lời chính xác hơn.</p></div>`:html`<table><thead><tr><th>Document</th><th>Chunks</th><th>Source</th></tr></thead><tbody>${docs.map(d=>html`<tr key=${d.id}><td><strong>${d.title}</strong></td><td>${d.chunks}</td><td style="font-size:12px">${d.source}</td></tr>`)}</tbody></table>`}</div>
   </div>`;
 }
@@ -782,8 +782,8 @@ function McpPage({ lang }) {
   return html`<div>
     <div class="page-header"><div><h1>🔗 ${t('mcp.title',lang)}</h1><div class="sub">${t('mcp.subtitle',lang)}</div></div></div>
     <div class="stats">
-      <\${StatsCard} label=${t('mcp.total',lang)} value=${servers.length} color="accent" icon="🔗" />
-      <\${StatsCard} label=${t('mcp.active',lang)} value=${servers.filter(s=>s.status==='connected').length} color="green" icon="✅" />
+      <${StatsCard} label=${t('mcp.total',lang)} value=${servers.length} color="accent" icon="🔗" />
+      <${StatsCard} label=${t('mcp.active',lang)} value=${servers.filter(s=>s.status==='connected').length} color="green" icon="✅" />
     </div>
     <div class="card"><h3 style="margin-bottom:12px">🔌 ${t('mcp.popular',lang)}</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
@@ -810,8 +810,8 @@ function OrchestrationPage({ lang }) {
   return html`<div>
     <div class="page-header"><div><h1>🔀 ${t('orch.title',lang)}</h1><div class="sub">${t('orch.subtitle',lang)}</div></div></div>
     <div class="stats">
-      <\${StatsCard} label=${t('orch.delegations',lang)} value=${delegations.length} color="accent" icon="📋" />
-      <\${StatsCard} label=${t('orch.links',lang)} value=${links.length} color="blue" icon="🔗" />
+      <${StatsCard} label=${t('orch.delegations',lang)} value=${delegations.length} color="accent" icon="📋" />
+      <${StatsCard} label=${t('orch.links',lang)} value=${links.length} color="blue" icon="🔗" />
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div class="card"><h3 style="margin-bottom:12px">📋 ${t('orch.delegate_title',lang)}</h3>
@@ -842,8 +842,8 @@ function GalleryPage({ lang }) {
   return html`<div>
     <div class="page-header"><div><h1>📦 ${t('gallery.title',lang)}</h1><div class="sub">${t('gallery.subtitle',lang)}</div></div></div>
     <div class="stats">
-      <\${StatsCard} label="Templates" value=${templates.length||51} color="accent" icon="📦" />
-      <\${StatsCard} label="Categories" value=${categories.length} color="blue" icon="📁" />
+      <${StatsCard} label="Templates" value=${templates.length||51} color="accent" icon="📦" />
+      <${StatsCard} label="Categories" value=${categories.length} color="blue" icon="📁" />
     </div>
     <div class="card"><h3 style="margin-bottom:12px">📁 Danh mục</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
@@ -869,9 +869,9 @@ function BrainPage({ lang }) {
   return html`<div>
     <div class="page-header"><div><h1>🧠 ${t('brain.title',lang)}</h1><div class="sub">${t('brain.ws_sub',lang)}</div></div></div>
     <div class="stats">
-      <\${StatsCard} label=${t('brain.engine',lang)} value="BizClaw Brain" color="accent" icon="🧠" />
-      <\${StatsCard} label=${t('brain.quant',lang)} value="Q4-Q8" color="blue" icon="📊" />
-      <\${StatsCard} label=${t('brain.files_count',lang)} value=${files.length} color="green" icon="📄" />
+      <${StatsCard} label=${t('brain.engine',lang)} value="BizClaw Brain" color="accent" icon="🧠" />
+      <${StatsCard} label=${t('brain.quant',lang)} value="Q4-Q8" color="blue" icon="📊" />
+      <${StatsCard} label=${t('brain.files_count',lang)} value=${files.length} color="green" icon="📄" />
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div class="card"><h3 style="margin-bottom:12px">🏥 ${t('brain.health_title',lang)}</h3>
@@ -941,36 +941,36 @@ function TracesPage({ lang }) {
     </div></div>
 
     <div class="stats">
-      <\${StatsCard} label="Total Calls" value=\${stats.total_calls || 0} color="accent" />
-      <\${StatsCard} label="Total Tokens" value=\${(stats.total_tokens || 0).toLocaleString()} color="blue" />
-      <\${StatsCard} label="Avg Latency" value=\${fmtLatency(stats.avg_latency_ms || 0)} color="green" />
-      <\${StatsCard} label="Total Cost" value=\${fmtCost(stats.total_cost_usd || 0)} color="orange" />
-      <\${StatsCard} label="Cache Hit" value=\${((stats.cache_hit_rate || 0) * 100).toFixed(0) + '%'} color="accent" />
+      <${StatsCard} label="Total Calls" value=${stats.total_calls || 0} color="accent" />
+      <${StatsCard} label="Total Tokens" value=${(stats.total_tokens || 0).toLocaleString()} color="blue" />
+      <${StatsCard} label="Avg Latency" value=${fmtLatency(stats.avg_latency_ms || 0)} color="green" />
+      <${StatsCard} label="Total Cost" value=${fmtCost(stats.total_cost_usd || 0)} color="orange" />
+      <${StatsCard} label="Cache Hit" value=${((stats.cache_hit_rate || 0) * 100).toFixed(0) + '%'} color="accent" />
     </div>
 
     <div class="card">
-      <h3 style="margin-bottom:12px">📈 Recent Traces (\${traces.length})</h3>
-      \${loading ? html\`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>\` : html\`
+      <h3 style="margin-bottom:12px">📈 Recent Traces (${traces.length})</h3>
+      ${loading ? html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>` : html`
         <table>
           <thead><tr>
             <th>Time</th><th>Model</th><th>Prompt</th><th>Completion</th><th>Total</th>
             <th>Latency</th><th>Cost</th><th>Cache</th><th>Status</th>
           </tr></thead>
           <tbody>
-            \${traces.map(t => html\`<tr key=\${t.id}>
-              <td style="font-family:var(--mono);font-size:12px">\${fmtTime(t.timestamp)}</td>
-              <td><span class="badge badge-blue">\${t.model}</span></td>
-              <td style="font-family:var(--mono);font-size:12px">\${t.prompt_tokens}</td>
-              <td style="font-family:var(--mono);font-size:12px">\${t.completion_tokens}</td>
-              <td style="font-family:var(--mono);font-size:12px;font-weight:600">\${t.total_tokens}</td>
-              <td style="font-family:var(--mono);font-size:12px">\${fmtLatency(t.latency_ms)}</td>
-              <td style="font-family:var(--mono);font-size:12px;color:var(--orange)">\${fmtCost(t.cost_usd)}</td>
-              <td>\${t.cache_hit ? '✅' : '➖'}</td>
-              <td><span class="badge \${t.status === 'ok' ? 'badge-green' : 'badge-red'}">\${t.status}</span></td>
-            </tr>\`)}
+            ${traces.map(t => html`<tr key=${t.id}>
+              <td style="font-family:var(--mono);font-size:12px">${fmtTime(t.timestamp)}</td>
+              <td><span class="badge badge-blue">${t.model}</span></td>
+              <td style="font-family:var(--mono);font-size:12px">${t.prompt_tokens}</td>
+              <td style="font-family:var(--mono);font-size:12px">${t.completion_tokens}</td>
+              <td style="font-family:var(--mono);font-size:12px;font-weight:600">${t.total_tokens}</td>
+              <td style="font-family:var(--mono);font-size:12px">${fmtLatency(t.latency_ms)}</td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--orange)">${fmtCost(t.cost_usd)}</td>
+              <td>${t.cache_hit ? '✅' : '➖'}</td>
+              <td><span class="badge ${t.status === 'ok' ? 'badge-green' : 'badge-red'}">${t.status}</span></td>
+            </tr>`)}
           </tbody>
         </table>
-      \`}
+      `}
     </div>
   </div>`;
 }
@@ -1003,31 +1003,31 @@ function CostPage({ lang }) {
     </div></div>
 
     <div class="stats">
-      <\${StatsCard} label="Total Cost" value=\${fmtCost(total)} color="orange" icon="💰" />
-      <\${StatsCard} label="Models Used" value=\${breakdown.length} color="blue" icon="🤖" />
-      <\${StatsCard} label="Total Calls" value=\${breakdown.reduce((s, b) => s + b.calls, 0)} color="accent" icon="📞" />
+      <${StatsCard} label="Total Cost" value=${fmtCost(total)} color="orange" icon="💰" />
+      <${StatsCard} label="Models Used" value=${breakdown.length} color="blue" icon="🤖" />
+      <${StatsCard} label="Total Calls" value=${breakdown.reduce((s, b) => s + b.calls, 0)} color="accent" icon="📞" />
     </div>
 
     <div class="card">
       <h3 style="margin-bottom:12px">📊 Cost by Model</h3>
-      \${loading ? html\`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>\` : html\`
+      ${loading ? html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>` : html`
         <table>
           <thead><tr><th>Model</th><th>Calls</th><th>Tokens</th><th>Cost</th><th>% of Total</th></tr></thead>
           <tbody>
-            \${sorted.map(b => html\`<tr key=\${b.model}>
-              <td><span class="badge badge-blue">\${b.model}</span></td>
-              <td style="font-family:var(--mono)">\${b.calls}</td>
-              <td style="font-family:var(--mono)">\${(b.total_tokens || 0).toLocaleString()}</td>
-              <td style="font-family:var(--mono);color:var(--orange);font-weight:600">\${fmtCost(b.cost_usd)}</td>
+            ${sorted.map(b => html`<tr key=${b.model}>
+              <td><span class="badge badge-blue">${b.model}</span></td>
+              <td style="font-family:var(--mono)">${b.calls}</td>
+              <td style="font-family:var(--mono)">${(b.total_tokens || 0).toLocaleString()}</td>
+              <td style="font-family:var(--mono);color:var(--orange);font-weight:600">${fmtCost(b.cost_usd)}</td>
               <td>
                 <div style="background:var(--bg2);border-radius:4px;height:16px;overflow:hidden">
-                  <div style="background:var(--grad1);height:100%;width:\${total > 0 ? (b.cost_usd / total * 100) : 0}%;border-radius:4px"></div>
+                  <div style="background:var(--grad1);height:100%;width:${total > 0 ? (b.cost_usd / total * 100) : 0}%;border-radius:4px"></div>
                 </div>
               </td>
-            </tr>\`)}
+            </tr>`)}
           </tbody>
         </table>
-      \`}
+      `}
     </div>
   </div>`;
 }
@@ -1074,31 +1074,31 @@ function ActivityPage({ lang }) {
     </div></div>
 
     <div class="stats">
-      <\${StatsCard} label="Events" value=\${events.length} color="accent" icon="⚡" />
+      <${StatsCard} label="Events" value=${events.length} color="accent" icon="⚡" />
     </div>
 
     <div class="card">
       <h3 style="margin-bottom:12px">📝 Event Log</h3>
-      \${loading ? html\`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>\` : events.length === 0
-        ? html\`<div style="text-align:center;padding:40px;color:var(--text2)">
+      ${loading ? html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>` : events.length === 0
+        ? html`<div style="text-align:center;padding:40px;color:var(--text2)">
             <div style="font-size:48px;margin-bottom:12px">🌟</div>
             <p>No activity yet. Start a conversation or run a scheduled task!</p>
-          </div>\`
-        : html\`<div style="display:flex;flex-direction:column;gap:8px">
-            \${events.map(ev => html\`
-              <div key=\${ev.timestamp} style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
-                <div style="font-size:20px">\${typeIcon(ev.event_type)}</div>
+          </div>`
+        : html`<div style="display:flex;flex-direction:column;gap:8px">
+            ${events.map(ev => html`
+              <div key=${ev.timestamp} style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+                <div style="font-size:20px">${typeIcon(ev.event_type)}</div>
                 <div style="flex:1">
                   <div style="display:flex;align-items:center;gap:8px">
-                    <span class="badge \${typeBadge(ev.event_type)}">\${ev.event_type}</span>
-                    <span style="color:var(--text2);font-size:12px">\${ev.agent}</span>
+                    <span class="badge ${typeBadge(ev.event_type)}">${ev.event_type}</span>
+                    <span style="color:var(--text2);font-size:12px">${ev.agent}</span>
                   </div>
-                  <div style="font-size:13px;margin-top:4px">\${ev.detail}</div>
+                  <div style="font-size:13px;margin-top:4px">${ev.detail}</div>
                 </div>
-                <div style="font-family:var(--mono);font-size:11px;color:var(--text2)">\${fmtTime(ev.timestamp)}</div>
+                <div style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtTime(ev.timestamp)}</div>
               </div>
-            \`)}
-          </div>\`
+            `)}
+          </div>`
       }
     </div>
   </div>`;
@@ -1169,9 +1169,9 @@ function WorkflowsPage({ lang }) {
     </div></div>
 
     <div class="stats">
-      <\${StatsCard} label=${t('wf.total', lang)} value=${workflows.length} color="accent" icon="🔄" />
-      <\${StatsCard} label=${t('wf.step_types', lang)} value="6" color="blue" icon="⚙️" />
-      <\${StatsCard} label=${t('wf.templates', lang)} value=${workflows.length} color="green" icon="📋" />
+      <${StatsCard} label=${t('wf.total', lang)} value=${workflows.length} color="accent" icon="🔄" />
+      <${StatsCard} label=${t('wf.step_types', lang)} value="6" color="blue" icon="⚙️" />
+      <${StatsCard} label=${t('wf.templates', lang)} value=${workflows.length} color="green" icon="📋" />
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -1261,9 +1261,9 @@ function SkillsPage({ lang }) {
     </div></div>
 
     <div class="stats">
-      <\${StatsCard} label=${t('skill.total', lang)} value=${skills.length} color="accent" icon="🧩" />
-      <\${StatsCard} label=${t('skill.installed', lang)} value=${skills.filter(s=>s.installed).length} color="green" icon="✅" />
-      <\${StatsCard} label=${t('skill.categories', lang)} value=${categories.length - 1} color="blue" icon="📁" />
+      <${StatsCard} label=${t('skill.total', lang)} value=${skills.length} color="accent" icon="🧩" />
+      <${StatsCard} label=${t('skill.installed', lang)} value=${skills.filter(s=>s.installed).length} color="green" icon="✅" />
+      <${StatsCard} label=${t('skill.categories', lang)} value=${categories.length - 1} color="blue" icon="📁" />
     </div>
 
     <div class="card" style="margin-bottom:14px">
