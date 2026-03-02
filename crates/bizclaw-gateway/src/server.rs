@@ -84,9 +84,13 @@ async fn dashboard_static(
     let full_path = format!("/static/dashboard/{}", path);
     let files = super::dashboard::dashboard_static_files();
     if let Some((content, content_type)) = files.get(full_path.as_str()) {
+        // Use ETag for cache validation — browser will revalidate on each load
+        // but still use cache if content hasn't changed (304 Not Modified)
+        let etag = format!("\"bizclaw-{}\"", env!("CARGO_PKG_VERSION"));
         axum::response::Response::builder()
             .header("Content-Type", *content_type)
-            .header("Cache-Control", "public, max-age=3600")
+            .header("Cache-Control", "no-cache, must-revalidate")
+            .header("ETag", &etag)
             .body(axum::body::Body::from(*content))
             .unwrap()
     } else {
