@@ -135,7 +135,24 @@ impl AdminServer {
             // ── ENTERPRISE: Budget Quota Control ───────────────────────────
             .route("/api/admin/tenants/{id}/quotas", get(list_quotas))
             .route("/api/admin/tenants/{id}/quotas/{resource}", put(set_quota))
+            // ── MISSION CONTROL: Kanban Task Board ─────────────────────────
+            .route("/api/admin/tasks", get(mc_list_tasks).post(mc_create_task))
+            .route("/api/admin/tasks/board", get(mc_kanban_board))
+            .route("/api/admin/tasks/pending-review", get(mc_pending_reviews))
+            .route("/api/admin/tasks/{tid}", get(mc_get_task).put(mc_update_task).delete(mc_delete_task))
+            .route("/api/admin/tasks/{tid}/comments", get(mc_list_comments).post(mc_add_comment))
+            .route("/api/admin/tasks/{tid}/review", post(mc_submit_review))
+            // ── MISSION CONTROL: Agent Session Monitor ─────────────────────
+            .route("/api/admin/sessions", get(mc_list_sessions))
+            .route("/api/admin/sessions/heartbeat", post(mc_heartbeat))
+            .route("/api/admin/sessions/{key}/terminate", post(mc_terminate_session))
+            // ── MISSION CONTROL: GitHub Issues Sync ────────────────────────
+            .route("/api/admin/tenants/{id}/github-syncs", get(mc_list_github_syncs).post(mc_upsert_github_sync))
+            .route("/api/admin/tenants/{id}/github-syncs/{repo}/trigger", post(mc_trigger_github_sync))
+            // ── MISSION CONTROL: Webhooks ───────────────────────────────────
+            .route("/api/admin/tenants/{id}/webhooks", get(mc_list_webhooks))
             .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
+
 
         // Public routes — including invitation acceptance
         let public = Router::new()
@@ -1937,5 +1954,374 @@ async fn set_quota(
             Err(e) => internal_error("set_quota", e),
         },
         None => Json(serde_json::json!({"ok": false, "error": "PostgreSQL required"})),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// MISSION CONTROL HANDLERS: Kanban Task Board
+// ════════════════════════════════════════════════════════════════════
+
+async fn mc_list_tasks(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => {
+            let tenant_id = params.get("tenant_id").map(|s| s.as_str());
+            let status    = params.get("status").map(|s| s.as_str());
+            let priority  = params.get("priority").map(|s| s.as_str());
+            let assigned  = params.get("assigned_to").map(|s| s.as_str());
+            let limit: i64 = params.get("limit").and_then(|v| v.parse().ok()).unwrap_or(100);
+            match pg.list_tasks(tenant_id, status, priority, assigned, limit).await {
+                Ok(tasks) => Json(serde_json::json!({ "ok": true, "tasks": tasks })),
+                Err(e)    => internal_error("mc_list_tasks", e),
+            }
+        }
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct McCreateTaskReq {
+    title:          String,
+    description:    Option<String>,
+    status:         Option<String>,
+    priority:       Option<String>,
+    assigned_to:    Option<String>,
+    assigned_agent: Option<String>,
+    tags:           Option<String>,
+    due_at:         Option<String>,
+    quality_gate:   Option<bool>,
+    tenant_id:      Option<String>,
+}
+
+async fn mc_create_task(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Json(req): Json<McCreateTaskReq>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => {
+            let create_req = crate::mission_control::CreateTaskReq {
+                title: req.title, description: req.description,
+                status: req.status, priority: req.priority,
+                assigned_to: req.assigned_to, assigned_agent: req.assigned_agent,
+                tags: req.tags, due_at: req.due_at,
+                quality_gate: req.quality_gate, tenant_id: req.tenant_id,
+            };
+            match pg.create_task(&create_req, &claims.sub).await {
+                Ok(task) => Json(serde_json::json!({ "ok": true, "task": task })),
+                Err(e)   => internal_error("mc_create_task", e),
+            }
+        }
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn mc_kanban_board(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => {
+            let tenant_id = params.get("tenant_id").map(|s| s.as_str());
+            match pg.get_kanban_board(tenant_id).await {
+                Ok(board) => Json(serde_json::json!({ "ok": true, "board": board })),
+                Err(e)    => internal_error("mc_kanban_board", e),
+            }
+        }
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn mc_pending_reviews(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => {
+            let tenant_id = params.get("tenant_id").map(|s| s.as_str());
+            match pg.get_pending_reviews(tenant_id).await {
+                Ok(tasks) => Json(serde_json::json!({ "ok": true, "tasks": tasks, "count": tasks.len() })),
+                Err(e)    => internal_error("mc_pending_reviews", e),
+            }
+        }
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn mc_get_task(
+    State(state): State<Arc<AdminState>>,
+    Path(tid): Path<String>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.get_task(&tid).await {
+            Ok(task) => Json(serde_json::json!({ "ok": true, "task": task })),
+            Err(e)   => internal_error("mc_get_task", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct McUpdateTaskReq {
+    title:          Option<String>,
+    description:    Option<String>,
+    status:         Option<String>,
+    priority:       Option<String>,
+    assigned_to:    Option<String>,
+    assigned_agent: Option<String>,
+    position:       Option<i32>,
+}
+
+async fn mc_update_task(
+    State(state): State<Arc<AdminState>>,
+    Path(tid): Path<String>,
+    Json(req): Json<McUpdateTaskReq>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.update_task(
+            &tid,
+            req.title.as_deref(), req.description.as_deref(),
+            req.status.as_deref(), req.priority.as_deref(),
+            req.assigned_to.as_deref(), req.assigned_agent.as_deref(),
+            req.position,
+        ).await {
+            Ok(task) => Json(serde_json::json!({ "ok": true, "task": task })),
+            Err(e)   => Json(serde_json::json!({ "ok": false, "error": e.to_string() })),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn mc_delete_task(
+    State(state): State<Arc<AdminState>>,
+    Path(tid): Path<String>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.delete_task(&tid).await {
+            Ok(()) => Json(serde_json::json!({ "ok": true })),
+            Err(e) => internal_error("mc_delete_task", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn mc_list_comments(
+    State(state): State<Arc<AdminState>>,
+    Path(tid): Path<String>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.list_task_comments(&tid).await {
+            Ok(comments) => Json(serde_json::json!({ "ok": true, "comments": comments })),
+            Err(e)       => internal_error("mc_list_comments", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct McCommentReq { content: String }
+
+async fn mc_add_comment(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(tid): Path<String>,
+    Json(req): Json<McCommentReq>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.add_task_comment(&tid, Some(&claims.sub), &claims.email, &req.content).await {
+            Ok(c) => Json(serde_json::json!({ "ok": true, "comment": c })),
+            Err(e) => internal_error("mc_add_comment", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct McReviewReq {
+    status: String,     // approved | rejected
+    notes:  Option<String>,
+}
+
+async fn mc_submit_review(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(tid): Path<String>,
+    Json(req): Json<McReviewReq>,
+) -> Json<serde_json::Value> {
+    let valid = ["approved", "rejected"];
+    if !valid.contains(&req.status.as_str()) {
+        return Json(serde_json::json!({ "ok": false, "error": "status phải là: approved | rejected" }));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.submit_quality_review(
+            &tid, Some(&claims.sub), &claims.email, &req.status, req.notes.as_deref()
+        ).await {
+            Ok(review) => Json(serde_json::json!({ "ok": true, "review": review })),
+            Err(e)     => internal_error("mc_submit_review", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// MISSION CONTROL HANDLERS: Agent Session Monitor
+// ════════════════════════════════════════════════════════════════════
+
+async fn mc_list_sessions(
+    State(state): State<Arc<AdminState>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => {
+            let tenant_id = params.get("tenant_id").map(|s| s.as_str());
+            match pg.list_agent_sessions(tenant_id).await {
+                Ok(sessions) => Json(serde_json::json!({ "ok": true, "sessions": sessions })),
+                Err(e)       => internal_error("mc_list_sessions", e),
+            }
+        }
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct McHeartbeatReq {
+    agent_name:         String,
+    session_key:        String,
+    tenant_id:          Option<String>,
+    prompt_tokens:      Option<i64>,
+    completion_tokens:  Option<i64>,
+    cost_usd:           Option<f32>,
+    model:              Option<String>,
+}
+
+async fn mc_heartbeat(
+    State(state): State<Arc<AdminState>>,
+    Json(req): Json<McHeartbeatReq>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.upsert_agent_session(
+            req.tenant_id.as_deref(), &req.agent_name, &req.session_key,
+            req.prompt_tokens.unwrap_or(0),
+            req.completion_tokens.unwrap_or(0),
+            req.cost_usd.unwrap_or(0.0),
+            req.model.as_deref(),
+        ).await {
+            Ok(session) => Json(serde_json::json!({ "ok": true, "session": session })),
+            Err(e)      => internal_error("mc_heartbeat", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn mc_terminate_session(
+    State(state): State<Arc<AdminState>>,
+    Path(key): Path<String>,
+) -> Json<serde_json::Value> {
+    match &state.pg_db {
+        Some(pg) => match pg.terminate_session(&key).await {
+            Ok(()) => Json(serde_json::json!({ "ok": true })),
+            Err(e) => internal_error("mc_terminate_session", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// MISSION CONTROL HANDLERS: GitHub Sync
+// ════════════════════════════════════════════════════════════════════
+
+async fn mc_list_github_syncs(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({ "ok": false, "error": "Không có quyền." }));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.list_github_syncs(&id).await {
+            Ok(syncs) => Json(serde_json::json!({ "ok": true, "syncs": syncs })),
+            Err(e)    => internal_error("mc_list_github_syncs", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct McGithubSyncReq {
+    repo:          String,
+    access_token:  Option<String>,
+    label_filter:  Option<String>,
+    auto_assign:   Option<String>,
+}
+
+async fn mc_upsert_github_sync(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+    Json(req): Json<McGithubSyncReq>,
+) -> Json<serde_json::Value> {
+    if !can_write_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({ "ok": false, "error": "Không có quyền." }));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.upsert_github_sync(
+            &id, &req.repo, req.access_token.as_deref(),
+            req.label_filter.as_deref().unwrap_or(""),
+            req.auto_assign.as_deref().unwrap_or(""),
+        ).await {
+            Ok(sync) => Json(serde_json::json!({ "ok": true, "sync": sync })),
+            Err(e)   => internal_error("mc_upsert_github_sync", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn mc_trigger_github_sync(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path((id, repo)): Path<(String, String)>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({ "ok": false, "error": "Không có quyền." }));
+    }
+    // repo path param may be URL-encoded "owner/repo" → decode
+    let repo_decoded = repo.replace("%2F", "/");
+    match &state.pg_db {
+        Some(pg) => match pg.sync_github_issues(&id, &repo_decoded).await {
+            Ok(count) => Json(serde_json::json!({
+                "ok": true,
+                "synced": count,
+                "message": format!("Đã sync {count} GitHub issues vào Task Board")
+            })),
+            Err(e) => internal_error("mc_trigger_github_sync", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// MISSION CONTROL HANDLERS: Webhooks
+// ════════════════════════════════════════════════════════════════════
+
+async fn mc_list_webhooks(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(id): Path<String>,
+) -> Json<serde_json::Value> {
+    if !can_access_tenant(&claims, &id, &*state.db.lock().await) {
+        return Json(serde_json::json!({ "ok": false, "error": "Không có quyền." }));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.list_webhooks(&id).await {
+            Ok(webhooks) => Json(serde_json::json!({ "ok": true, "webhooks": webhooks })),
+            Err(e)       => internal_error("mc_list_webhooks", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
     }
 }

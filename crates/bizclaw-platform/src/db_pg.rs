@@ -176,8 +176,24 @@ impl PgDb {
             })
             .ok();
 
+        // Mission Control migration — Tasks, QualityGate, Sessions, GitHub
+        let mc_sql = include_str!("../../../migrations/003_mission_control.sql");
+        sqlx::raw_sql(mc_sql)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("already exists") || msg.contains("duplicate key") {
+                    tracing::debug!("PG mission-control migration: already applied");
+                    return BizClawError::Memory("OK".into());
+                }
+                BizClawError::Memory(format!("PG mission-control migration error: {e}"))
+            })
+            .ok();
+
         Ok(())
     }
+
 
 
 
