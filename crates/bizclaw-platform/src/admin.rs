@@ -330,26 +330,23 @@ server {{
 
         // Try to reload nginx — multiple strategies for Docker vs bare-metal
         // Strategy 1: nginx -s reload (works if nginx is in same container)
-        if let Ok(out) = std::process::Command::new("nginx").args(["-s", "reload"]).output() {
-            if out.status.success() {
+        if let Ok(out) = std::process::Command::new("nginx").args(["-s", "reload"]).output()
+            && out.status.success() {
                 tracing::info!("nginx-sync[{domain}]: {} tenants synced, nginx reloaded (nginx -s)", tenants.len());
                 return;
             }
-        }
         // Strategy 2: systemctl reload nginx (bare-metal)
-        if let Ok(out) = std::process::Command::new("systemctl").args(["reload", "nginx"]).output() {
-            if out.status.success() {
+        if let Ok(out) = std::process::Command::new("systemctl").args(["reload", "nginx"]).output()
+            && out.status.success() {
                 tracing::info!("nginx-sync[{domain}]: {} tenants synced, nginx reloaded (systemctl)", tenants.len());
                 return;
             }
-        }
         // Strategy 3: send HUP to nginx master process (Docker — if pid is available)
-        if let Ok(out) = std::process::Command::new("sh").args(["-c", "kill -HUP $(cat /var/run/nginx.pid 2>/dev/null) 2>/dev/null"]).output() {
-            if out.status.success() {
+        if let Ok(out) = std::process::Command::new("sh").args(["-c", "kill -HUP $(cat /var/run/nginx.pid 2>/dev/null) 2>/dev/null"]).output()
+            && out.status.success() {
                 tracing::info!("nginx-sync[{domain}]: {} tenants synced, nginx reloaded (HUP)", tenants.len());
                 return;
             }
-        }
         // If none worked, config is written but nginx needs manual reload
         tracing::warn!("nginx-sync[{domain}]: config written ({} tenants) but nginx reload failed — may need manual reload", tenants.len());
     });

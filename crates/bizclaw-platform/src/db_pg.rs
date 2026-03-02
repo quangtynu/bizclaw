@@ -173,6 +173,7 @@ impl PgDb {
     // CORE PLATFORM — Tenant CRUD
     // ════════════════════════════════════════════════════════
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_tenant(
         &self, name: &str, slug: &str, port: u16,
         provider: &str, model: &str, plan: &str, owner_id: Option<&str>,
@@ -561,6 +562,7 @@ impl PgDb {
     // TENANT AGENTS
     // ════════════════════════════════════════════════════════
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn upsert_agent(
         &self, tenant_id: &str, name: &str, role: &str,
         description: &str, provider: &str, model: &str, system_prompt: &str,
@@ -643,6 +645,7 @@ impl PgDb {
     // ════════════════════════════════════════════════════════
 
     /// Store personal memory (user preferences, learned facts).
+    #[allow(clippy::too_many_arguments)]
     pub async fn store_personal_memory(
         &self, tenant_id: &str, user_id: Option<&str>,
         category: &str, key: &str, value: &str,
@@ -679,6 +682,7 @@ impl PgDb {
     }
 
     /// Store task memory (learned from past tasks).
+    #[allow(clippy::too_many_arguments)]
     pub async fn store_task_memory(
         &self, tenant_id: &str, task_type: &str, description: &str,
         approach: &str, outcome: &str, lessons: &str,
@@ -722,6 +726,7 @@ impl PgDb {
     }
 
     /// Store or update working memory (conversation summary).
+    #[allow(clippy::too_many_arguments)]
     pub async fn upsert_working_memory(
         &self, tenant_id: &str, session_id: &str,
         channel: Option<&str>, user_id: Option<&str>,
@@ -863,6 +868,7 @@ impl PgDb {
     }
 
     /// Create or update a skill.
+    #[allow(clippy::too_many_arguments)]
     pub async fn upsert_skill(
         &self, tenant_id: Option<&str>, name: &str, slug: &str,
         description: &str, language: &str, category: &str,

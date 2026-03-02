@@ -76,7 +76,7 @@ impl TtsEngine {
         match self.config.provider.as_str() {
             "openai" => self.openai_tts(text).await,
             "elevenlabs" => self.elevenlabs_tts(text).await,
-            "edge" | _ => self.edge_tts(text).await,
+            _ => self.edge_tts(text).await,
         }
     }
 
@@ -201,7 +201,7 @@ impl TtsEngine {
                 VoiceInfo { id: "nova".into(), name: "Nova".into(), lang: "en".into() },
                 VoiceInfo { id: "shimmer".into(), name: "Shimmer".into(), lang: "en".into() },
             ],
-            "edge" | _ => vec![
+            _ => vec![
                 VoiceInfo { id: "vi-VN-HoaiMyNeural".into(), name: "Hoài My (VN)".into(), lang: "vi".into() },
                 VoiceInfo { id: "vi-VN-NamMinhNeural".into(), name: "Nam Minh (VN)".into(), lang: "vi".into() },
                 VoiceInfo { id: "en-US-AriaNeural".into(), name: "Aria (US)".into(), lang: "en".into() },

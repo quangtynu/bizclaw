@@ -140,7 +140,7 @@ impl SkillRegistry {
                         }
                     }
                 }
-            } else if path.file_name().map_or(false, |n| n == "SKILL.md") {
+            } else if path.file_name().is_some_and(|n| n == "SKILL.md") {
                 match SkillManifest::load(&path) {
                     Ok(skill) => {
                         self.install(skill);

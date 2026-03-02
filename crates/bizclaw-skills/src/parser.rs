@@ -126,8 +126,8 @@ impl SkillManifest {
             }
 
             // List item
-            if trimmed.starts_with("- ") {
-                let value = trimmed[2..].trim().trim_matches('"').trim_matches('\'');
+            if let Some(stripped) = trimmed.strip_prefix("- ") {
+                let value = stripped.trim().trim_matches('"').trim_matches('\'');
                 match current_list {
                     Some("tags") => tags.push(value.to_string()),
                     Some("requires_tools") => requires_tools.push(value.to_string()),

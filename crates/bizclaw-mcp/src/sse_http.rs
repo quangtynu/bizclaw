@@ -67,7 +67,7 @@ impl SseTransport {
     }
 
     /// Send a JSON-RPC request via HTTP POST and read the response.
-    pub async fn request(&self, req: &JsonRpcRequest) -> Result<JsonRpcResponse, String> {
+    pub(crate) async fn request(&self, req: &JsonRpcRequest) -> Result<JsonRpcResponse, String> {
         let mut builder = self.client.post(&self.endpoint);
 
         for (key, value) in &self.headers {
@@ -96,17 +96,15 @@ impl SseTransport {
         // Parse SSE data lines — look for data: {...} lines
         for raw_line in body.lines() {
             let trimmed = raw_line.trim();
-            if let Some(data) = trimmed.strip_prefix("data: ") {
-                if let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(data) {
+            if let Some(data) = trimmed.strip_prefix("data: ")
+                && let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(data) {
                     return Ok(resp);
                 }
-            }
             // Also try parsing the whole body as JSON (non-SSE response)
-            if trimmed.starts_with('{') {
-                if let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(trimmed) {
+            if trimmed.starts_with('{')
+                && let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(trimmed) {
                     return Ok(resp);
                 }
-            }
         }
 
         // Try parsing the entire body as JSON
@@ -134,6 +132,7 @@ impl SseTransport {
 /// Streamable HTTP transport for MCP — uses standard HTTP POST.
 /// 
 /// This is the simplest transport: just POST JSON-RPC to an HTTP endpoint.
+#[allow(dead_code)]
 pub struct HttpTransport {
     /// The HTTP endpoint URL.
     endpoint: String,
@@ -167,7 +166,8 @@ impl HttpTransport {
     }
 
     /// Send a JSON-RPC request and get the response.
-    pub async fn request(&self, req: &JsonRpcRequest) -> Result<JsonRpcResponse, String> {
+    #[allow(dead_code)]
+    pub(crate) async fn request(&self, req: &JsonRpcRequest) -> Result<JsonRpcResponse, String> {
         let mut builder = self
             .client
             .post(&self.endpoint)

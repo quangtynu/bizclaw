@@ -53,7 +53,7 @@ async-trait = "0.1"
 tokio-stream = "0.1"
 # Crypto
 aes = "0.8"
-rsa = "0.9"
+rsa = "0.9.6"
 sha2 = "0.10"
 hmac = "0.12"
 base64 = "0.22"
