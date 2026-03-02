@@ -162,6 +162,7 @@ impl AdminServer {
             .route("/api/admin/password-reset", post(crate::self_serve::forgot_password_handler))
             .route("/api/admin/password-reset/confirm", post(crate::self_serve::reset_password_handler))
             .route("/api/admin/invitations/{token}/accept", post(accept_invitation))
+            .route("/pixel-office", get(pixel_office_page))
             .route("/", get(admin_dashboard_page));
 
 
@@ -268,6 +269,12 @@ fn internal_error(context: &str, e: impl std::fmt::Display) -> Json<serde_json::
 /// Regenerate /etc/nginx/conf.d/{domain}-tenants.conf from the DB
 /// and reload nginx so new/removed tenants are routed correctly.
 /// Runs in a background thread to avoid blocking the HTTP response.
+///
+/// ## Environment Variables
+/// - `NGINX_SSL_CERT_DIR`: Override SSL cert directory name under `/etc/letsencrypt/live/`.
+///   Default: uses the domain name. Example: `NGINX_SSL_CERT_DIR=bizclaw.vn-0001`
+/// - `NGINX_CONTAINER_NAME`: Docker container name for nginx. Default: `bizclaw-nginx`
+/// - `BIZCLAW_BIND_ALL`: If `1`, upstream connects to Docker service hostname; else `127.0.0.1`
 async fn sync_nginx_routing(state: &AdminState) {
     let domain = state.domain.clone();
     let tenants = match state.db.lock().await.list_tenants() {
@@ -283,6 +290,10 @@ async fn sync_nginx_routing(state: &AdminState) {
         // Use domain prefix for map variable names to avoid conflicts between domains
         let domain_slug = domain.replace('.', "_");
         let mut map_entries = String::new();
+
+        // Reserved subdomains that should NOT be treated as tenant slugs
+        let reserved_subdomains = ["apps", "www", "api", "admin", "mail", "smtp", "imap", "ftp"];
+
         for t in &tenants {
             // M5 FIX: Validate slug contains only safe chars before injecting into nginx config
             let safe_slug: String = t.slug.chars()
@@ -290,6 +301,11 @@ async fn sync_nginx_routing(state: &AdminState) {
                 .collect();
             if safe_slug.is_empty() || safe_slug != t.slug {
                 tracing::warn!("nginx-sync[{domain}]: skipping tenant '{}' — slug contains unsafe chars", t.slug);
+                continue;
+            }
+            // Skip reserved subdomains
+            if reserved_subdomains.contains(&safe_slug.as_str()) {
+                tracing::warn!("nginx-sync[{domain}]: skipping tenant '{}' — reserved subdomain", t.slug);
                 continue;
             }
             map_entries.push_str(&format!("    {}      {};\n", safe_slug, t.port));
@@ -307,22 +323,42 @@ async fn sync_nginx_routing(state: &AdminState) {
             "127.0.0.1".to_string()
         };
 
+        // SSL cert directory: configurable via NGINX_SSL_CERT_DIR env var
+        // Allows overriding when certbot creates directories like "bizclaw.vn-0001"
+        let ssl_cert_dir = std::env::var("NGINX_SSL_CERT_DIR")
+            .unwrap_or_else(|_| domain.clone());
+
         let conf = format!(
             r#"# {domain} Dynamic Tenant Routing (auto-generated)
+# Generated at: {timestamp}
+# Tenants: {tenant_count}
+
 map $subdomain_{domain_slug} $tenant_port_{domain_slug} {{
     default   0;
 {map_entries}}}
 
 server {{
     listen 80;
-    listen 443 ssl;
+    listen 443 ssl http2;
     server_name ~^(?<subdomain_{domain_slug}>[^.]+)\.{domain_regex}$;
 
-    ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/{ssl_cert_dir}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{ssl_cert_dir}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
 
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # Reserved subdomains — let static server blocks handle them
+    if ($subdomain_{domain_slug} = "apps") {{
+        return 444;
+    }}
+    if ($subdomain_{domain_slug} = "www") {{
+        return 444;
+    }}
 
     if ($tenant_port_{domain_slug} = 0) {{
         return 404;
@@ -340,7 +376,9 @@ server {{
         proxy_read_timeout 86400;
     }}
 }}
-"#
+"#,
+            timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+            tenant_count = tenants.len(),
         );
 
         // Try multiple paths: shared Docker volume first, then traditional path
@@ -368,6 +406,16 @@ server {{
         }
 
         // Try to reload nginx — multiple strategies for Docker vs bare-metal
+        // Strategy 0: docker exec (when bizclaw runs in a separate container from nginx)
+        let nginx_container = std::env::var("NGINX_CONTAINER_NAME")
+            .unwrap_or_else(|_| "bizclaw-nginx".to_string());
+        if let Ok(out) = std::process::Command::new("docker")
+            .args(["exec", &nginx_container, "nginx", "-s", "reload"])
+            .output()
+            && out.status.success() {
+                tracing::info!("nginx-sync[{domain}]: {} tenants synced, nginx reloaded (docker exec {})", tenants.len(), nginx_container);
+                return;
+            }
         // Strategy 1: nginx -s reload (works if nginx is in same container)
         if let Ok(out) = std::process::Command::new("nginx").args(["-s", "reload"]).output()
             && out.status.success() {
@@ -921,6 +969,10 @@ async fn validate_pairing(
 
 async fn admin_dashboard_page() -> axum::response::Html<&'static str> {
     axum::response::Html(include_str!("admin_dashboard.html"))
+}
+
+async fn pixel_office_page() -> axum::response::Html<&'static str> {
+    axum::response::Html(include_str!("../../../data/pixel_office.html"))
 }
 
 // ── Channel Configuration Handlers ────────────────────────────────────

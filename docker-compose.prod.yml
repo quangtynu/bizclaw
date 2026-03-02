@@ -49,11 +49,14 @@ services:
     volumes:
       - bizclaw_data:/root/.bizclaw
       - nginx_dynamic:/etc/nginx/dynamic
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - RUST_LOG=info
       - BIZCLAW_CONFIG=/root/.bizclaw/config.toml
       - BIZCLAW_CORS_ORIGINS=https://bizclaw.vn,https://apps.bizclaw.vn
       - BIZCLAW_BIND_ALL=1
+      - NGINX_SSL_CERT_DIR=bizclaw.vn-0001
+      - NGINX_CONTAINER_NAME=bizclaw-nginx
       - DATABASE_URL=postgres://bizclaw:BizClaw@2026DB@postgres:5432/bizclaw
       - TZ=Asia/Ho_Chi_Minh
     depends_on:

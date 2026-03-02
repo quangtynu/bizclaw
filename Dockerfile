@@ -22,7 +22,7 @@ RUN cargo build --release --bin bizclaw --bin bizclaw-platform
 FROM debian:trixie-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 curl \
+    ca-certificates libssl3 curl docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binaries
@@ -38,7 +38,7 @@ ENV RUST_LOG=info
 ENV TZ=Asia/Ho_Chi_Minh
 
 # Expose ports: platform admin (3001) + tenant gateways (10001-10010)
-EXPOSE 3001 10001 10002 10003 10004 10005
+EXPOSE 3001 10001 10002 10003 10004 10005 10006 10007 10008 10009 10010
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

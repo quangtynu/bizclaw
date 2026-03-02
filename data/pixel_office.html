@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BizClaw — Pixel Office Live Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e14;color:#c9d1d9;font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:16px;padding:10px 20px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0}
+.logo{font-family:'Press Start 2P',monospace;font-size:11px;color:#58a6ff;text-shadow:0 0 10px #58a6ff88}
+.hstats{display:flex;gap:16px;align-items:center;margin-left:auto;font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;animation:pulse 2s infinite}
+.dot.green{background:#3fb950;box-shadow:0 0 6px #3fb950}
+.dot.yellow{background:#d29922}
+.dot.red{background:#f85149}
+.dot.gray{background:#6e7681;animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.back{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:4px 12px;border-radius:6px;text-decoration:none;font-size:11px;transition:.2s}
+.back:hover{background:#30363d;color:#c9d1d9}
+main{display:flex;flex:1;overflow:hidden}
+.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#0a0e14;position:relative;overflow:hidden}
+.canvas-wrap::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.08) 3px,rgba(0,0,0,.08) 4px);pointer-events:none;z-index:10}
+#office{image-rendering:pixelated;image-rendering:crisp-edges;cursor:crosshair;border:2px solid #30363d;box-shadow:0 0 40px #58a6ff22}
+aside{width:260px;background:#161b22;border-left:1px solid #30363d;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+aside h3{font-family:'Press Start 2P',monospace;font-size:8px;color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:8px}
+.session-card{background:#21262d;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:11px;transition:.2s;cursor:pointer}
+.session-card:hover{border-color:#58a6ff44;background:#2a3040}
+.session-card .name{color:#58a6ff;font-weight:bold;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-card .meta{color:#8b949e;font-size:10px}
+.session-card .cost{color:#3fb950;float:right;font-size:10px}
+.status-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;margin-top:3px}
+.status-badge.active{background:#1a3a2a;color:#3fb950;border:1px solid #3fb95044}
+.status-badge.idle{background:#3a2e10;color:#d29922;border:1px solid #d2992244}
+.status-badge.terminated{background:#3a1010;color:#f85149;border:1px solid #f8514944}
+.stat-row{display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid #21262d}
+.stat-row .val{color:#3fb950;font-family:'Press Start 2P',monospace;font-size:9px}
+footer{display:flex;align-items:center;gap:16px;padding:8px 20px;background:#161b22;border-top:1px solid #30363d;font-size:10px;flex-shrink:0}
+.legend-item{display:flex;align-items:center;gap:6px}
+#tooltip{position:fixed;background:#1c2128;border:1px solid #58a6ff;border-radius:6px;padding:8px 12px;font-size:11px;pointer-events:none;display:none;z-index:100;min-width:160px}
+#tooltip .t-name{color:#58a6ff;font-weight:bold;margin-bottom:4px}
+#tooltip .t-row{color:#8b949e;font-size:10px}
+#fps{position:absolute;top:4px;left:4px;font-size:9px;color:#30363d;font-family:monospace}
+.empty{color:#8b949e;font-size:10px;text-align:center;padding:20px}
+#refreshing{position:absolute;bottom:8px;right:8px;font-size:9px;color:#8b949e;opacity:0;transition:.3s}
+#refreshing.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🎮 PIXEL OFFICE</div>
+  <div style="font-size:11px;color:#8b949e">BizClaw Live Agent Monitor</div>
+  <div class="hstats">
+    <span id="h-active">0 active</span>
+    <span style="color:#8b949e">|</span>
+    <span id="h-tenants">0 tenants</span>
+    <span style="color:#8b949e">|</span>
+    <span class="dot" id="conn-dot" style="background:#3fb950;box-shadow:0 0 6px #3fb950"></span>
+    <span id="conn-txt">live</span>
+  </div>
+  <a href="/" class="back">← Dashboard</a>
+</header>
+<main>
+  <div class="canvas-wrap">
+    <canvas id="office"></canvas>
+    <div id="fps"></div>
+    <div id="refreshing">↻ syncing...</div>
+  </div>
+  <aside>
+    <div>
+      <h3>🔴 LIVE SESSIONS</h3>
+      <div id="session-list"><div class="empty">No active sessions</div></div>
+    </div>
+    <div>
+      <h3>📊 STATS</h3>
+      <div id="stats-panel">
+        <div class="stat-row"><span>Total Tokens</span><span class="val" id="s-tokens">0</span></div>
+        <div class="stat-row"><span>Total Cost</span><span class="val" id="s-cost">$0.000</span></div>
+        <div class="stat-row"><span>Active</span><span class="val" id="s-active">0</span></div>
+        <div class="stat-row"><span>Idle</span><span class="val" id="s-idle">0</span></div>
+        <div class="stat-row"><span>Tenants</span><span class="val" id="s-cnt">0</span></div>
+      </div>
+    </div>
+    <div style="font-size:9px;color:#6e7681;margin-top:auto;padding-top:8px;border-top:1px solid #30363d">
+      Auto-refresh every 3s<br>Click character to inspect
+    </div>
+  </aside>
+</main>
+<footer>
+  <div class="legend-item"><span class="dot green"></span><span>Active / Typing</span></div>
+  <div class="legend-item"><span class="dot yellow"></span><span>Idle</span></div>
+  <div class="legend-item"><span class="dot red"></span><span>Terminated</span></div>
+  <div class="legend-item" style="margin-left:auto;color:#8b949e;font-size:9px" id="last-update">—</div>
+</footer>
+<div id="tooltip">
+  <div class="t-name" id="tt-name"></div>
+  <div class="t-row" id="tt-agent"></div>
+  <div class="t-row" id="tt-tokens"></div>
+  <div class="t-row" id="tt-cost"></div>
+  <div class="t-row" id="tt-since"></div>
+</div>
+<script>
+// ═══════════════════════════════════════════════════════
+//  BizClaw Pixel Office — Real-time Agent Visualizer
+// ═══════════════════════════════════════════════════════
+const API = '/api/admin';
+const TILE = 20;
+const COLS = 38;
+const ROWS = 26;
+const W = COLS * TILE;
+const H = ROWS * TILE;
+const PI2 = Math.PI * 2;
+
+// Auth
+function token() { return localStorage.getItem('bca_token') || localStorage.getItem('token') || ''; }
+async function apiFetch(path) {
+  const r = await fetch(API + path, { headers: { Authorization: 'Bearer ' + token() } });
+  if (r.status === 401) { location.href = '/'; return null; }
+  return r.json();
+}
+
+// Canvas setup
+const canvas = document.getElementById('office');
+canvas.width = W; canvas.height = H;
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// ── Color palette ───────────────────────────────────────
+const C = {
+  floor:    '#1a1f2e', floorLine: '#1f2537',
+  wall:     '#0d1117', wallLight: '#21262d',
+  carpet:   ['#1a2a1a','#2a1a1a','#1a1a2a','#2a2a1a','#1a2a2a','#2a1a2a'],
+  desk:     '#2d1f0e', deskTop: '#4a3520', monitor:'#0d0d1a', screen:'#1e90ff',
+  plant:    '#1a3a10', plantPot:'#5a3a20',
+  chair:    '#1c2128', meeting:  '#1a1a3a',
+  chars:    ['#58a6ff','#3fb950','#d29922','#f85149','#bc8cff','#ff7b72','#79c0ff','#56d364'],
+  skin:     ['#fdbcb4','#f1a98a','#c68642','#8d5524'],
+};
+
+// ── State ───────────────────────────────────────────────
+let tenants = [], sessions = [];
+let characters = new Map(); // session_key → CharState
+let zones = [];
+let hoveredChar = null;
+let frame = 0;
+let fps = 0, fpsCounter = 0, fpsTimer = Date.now();
+
+// ── Office layout ───────────────────────────────────────
+function buildZones(tenantList) {
+  zones = [];
+  const n = Math.max(tenantList.length, 1);
+  const cols = Math.min(Math.ceil(Math.sqrt(n)), 5);
+  const rows = Math.ceil(n / cols);
+  const zW = Math.floor((COLS - 4) / cols);
+  const zH = Math.floor((ROWS - 4) / rows);
+  tenantList.forEach((t, i) => {
+    const col = i % cols, row = Math.floor(i / cols);
+    zones.push({
+      id: t.id, name: t.name || t.slug || ('Tenant '+(i+1)),
+      x: 2 + col * zW, y: 2 + row * zH, w: zW - 1, h: zH - 1,
+      carpet: C.carpet[i % C.carpet.length],
+      deskX: 2 + col*zW + 2, deskY: 2 + row*zH + 1,
+      chars: [],
+    });
+  });
+  // Add a "lobby" zone for unassigned
+  if (zones.length === 0) {
+    zones.push({ id: null, name:'Lobby', x:2, y:2, w:COLS-4, h:ROWS-4, carpet:C.carpet[0], deskX:4, deskY:4, chars:[] });
+  }
+}
+
+function getZoneForTenant(tenantId) {
+  return zones.find(z => z.id === tenantId) || zones[0];
+}
+
+// ── Character state machine ─────────────────────────────
+class CharState {
+  constructor(sess, colorIdx) {
+    const z = getZoneForTenant(sess.tenant_id);
+    const deskSlot = z ? z.chars.length : 0;
+    // Desk positions within zone — zigzag layout
+    const deskCols = Math.max(Math.floor((z ? z.w-1 : 3) / 3), 1);
+    const dc = deskSlot % deskCols, dr = Math.floor(deskSlot / deskCols);
+    this.deskTX = (z ? z.x + 2 : 4) + dc * 3;
+    this.deskTY = (z ? z.y + 1 : 4) + dr * 3;
+    // Start outside zone (walk in)
+    this.px = (this.deskTX + 0.5) * TILE;
+    this.py = (z ? z.y - 1 : 2) * TILE;
+    this.tx = (this.deskTX + 0.5) * TILE;
+    this.ty = (this.deskTY + 1) * TILE;
+    this.colorIdx = colorIdx;
+    this.skinIdx = colorIdx % C.skin.length;
+    this.sess = sess;
+    this.animFrame = Math.random() * 100;
+    this.walkPhase = 0;
+    this.walking = true;
+    this.selected = false;
+    if (z) z.chars.push(this);
+  }
+
+  update() {
+    this.animFrame++;
+    const dx = this.tx - this.px, dy = this.ty - this.py;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > 1.5) {
+      this.walking = true;
+      const spd = 1.5;
+      this.px += (dx/dist)*spd; this.py += (dy/dist)*spd;
+      this.walkPhase += 0.2;
+    } else {
+      this.px = this.tx; this.py = this.ty;
+      this.walking = false;
+    }
+  }
+
+  get state() {
+    if (this.walking) return 'walk';
+    return this.sess.status === 'active' ? 'type' : this.sess.status === 'idle' ? 'idle' : 'done';
+  }
+
+  get statusColor() {
+    return this.state==='type'?'#3fb950':this.state==='idle'?'#d29922':this.state==='done'?'#f85149':'#8b949e';
+  }
+}
+
+let charColorIdx = 0;
+
+function syncCharacters() {
+  // Remove old
+  const alive = new Set(sessions.map(s=>s.session_key||s.id));
+  for (const [k] of characters) { if (!alive.has(k)) characters.delete(k); }
+  // Add new
+  zones.forEach(z => z.chars = []);
+  sessions.forEach(sess => {
+    const key = sess.session_key || sess.id;
+    if (!key) return;
+    if (!characters.has(key)) {
+      characters.set(key, new CharState(sess, charColorIdx++ % C.chars.length));
+    } else {
+      characters.get(key).sess = sess;
+    }
+  });
+}
+
+// ── Drawing functions ───────────────────────────────────
+function fillRect(x,y,w,h,c) { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); }
+function strokeRect(x,y,w,h,c,lw=1) { ctx.strokeStyle=c; ctx.lineWidth=lw; ctx.strokeRect(x+.5,y+.5,w,h); }
+
+function drawFloor() {
+  // Base floor
+  fillRect(0, 0, W, H, C.wall);
+  // Interior floor
+  for (let r = 1; r < ROWS-1; r++) {
+    for (let c = 1; c < COLS-1; c++) {
+      const x=c*TILE, y=r*TILE;
+      const shade = (r+c)%2===0 ? C.floor : C.floorLine;
+      fillRect(x+1, y+1, TILE-1, TILE-1, shade);
+    }
+  }
+  // Outer walls - top-down brick look
+  for (let c = 0; c < COLS; c++) {
+    const x = c*TILE;
+    fillRect(x,0,TILE,TILE,C.wallLight);
+    fillRect(x,(ROWS-1)*TILE,TILE,TILE,C.wallLight);
+  }
+  for (let r = 0; r < ROWS; r++) {
+    const y = r*TILE;
+    fillRect(0,y,TILE,TILE,C.wallLight);
+    fillRect((COLS-1)*TILE,y,TILE,TILE,C.wallLight);
+  }
+  // Wall details
+  ctx.fillStyle = '#2a3040';
+  for (let c = 0; c < COLS; c++) {
+    ctx.fillRect(c*TILE+1, 6, TILE-2, 2);
+    ctx.fillRect(c*TILE+1, (ROWS-1)*TILE+TILE-8, TILE-2, 2);
+  }
+}
+
+function drawZones() {
+  zones.forEach(z => {
+    // Carpet
+    for (let r=z.y; r<z.y+z.h; r++) {
+      for (let c=z.x; c<z.x+z.w; c++) {
+        fillRect(c*TILE+1, r*TILE+1, TILE-1, TILE-1, z.carpet);
+      }
+    }
+    // Zone border
+    strokeRect(z.x*TILE, z.y*TILE, z.w*TILE, z.h*TILE, '#ffffff18', 1);
+    // Zone label
+    ctx.fillStyle = '#ffffff44';
+    ctx.font = '8px "Share Tech Mono",monospace';
+    ctx.fillText(z.name.slice(0,10), z.x*TILE+4, z.y*TILE+10);
+    // Desks
+    const deskCols = Math.max(Math.floor((z.w-1)/3),1);
+    const maxDesks = deskCols * Math.floor((z.h-2)/3);
+    for (let d=0; d<Math.min(z.chars.length+1, maxDesks); d++) {
+      const dc=d%deskCols, dr=Math.floor(d/deskCols);
+      const dx=(z.x+2+dc*3)*TILE, dy=(z.y+1+dr*3)*TILE;
+      drawDesk(dx, dy);
+    }
+  });
+}
+
+function drawDesk(x, y) {
+  // Desk surface
+  fillRect(x, y, TILE*2, TILE, C.deskTop);
+  strokeRect(x, y, TILE*2, TILE, '#5a4030', 1);
+  // Monitor
+  fillRect(x+TILE+2, y+2, 10, 14, C.monitor);
+  fillRect(x+TILE+3, y+3, 8, 10, C.screen);
+  // Keyboard
+  fillRect(x+4, y+TILE-5, 12, 4, '#2a3040');
+  // Desk leg shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(x+2, y+TILE, TILE*2-4, 3);
+  // Chair
+  fillRect(x+4, y+TILE+2, 12, 10, C.chair);
+  strokeRect(x+4, y+TILE+2, 12, 10, '#30363d', 1);
+}
+
+function drawPlant(x, y) {
+  // Pot
+  fillRect(x+4, y+12, 8, 8, C.plantPot);
+  // Leaves
+  ctx.fillStyle = C.plant;
+  ctx.beginPath(); ctx.arc(x+8, y+8, 7, 0, PI2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+4, y+12, 5, 0, PI2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+12, y+11, 5, 0, PI2); ctx.fill();
+}
+
+function drawCharacters() {
+  const chars = [...characters.values()].sort((a,b) => a.py - b.py);
+  chars.forEach(ch => {
+    ch.update();
+    drawChar(ch);
+  });
+}
+
+function drawChar(ch) {
+  const cx = Math.round(ch.px), cy = Math.round(ch.py);
+  const color = C.chars[ch.colorIdx % C.chars.length];
+  const skin  = C.skin[ch.skinIdx];
+  const af    = ch.animFrame;
+  const st    = ch.state;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(cx, cy+7, 7, 3, 0, 0, PI2); ctx.fill();
+
+  // Walk bobbing
+  const bob = st==='walk' ? Math.sin(ch.walkPhase)*2 : st==='idle' ? Math.sin(af*0.04)*1 : 0;
+
+  // Body (top-down: wider oval)
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(cx, cy+2+bob, 6, 4, 0, 0, PI2); ctx.fill();
+
+  // Head
+  ctx.fillStyle = skin;
+  ctx.beginPath(); ctx.arc(cx, cy-3+bob, 5, 0, PI2); ctx.fill();
+
+  // Hair (small arc on top)
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(cx, cy-5+bob, 5, Math.PI, 0); ctx.fill();
+
+  // Face details
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(cx-2, cy-2+bob, 2, 2); // eye L
+  ctx.fillRect(cx+1, cy-2+bob, 2, 2); // eye R
+
+  // Typing animation – arms moving
+  if (st === 'type') {
+    const armY = cy + 4 + bob + Math.sin(af*0.5)*2;
+    ctx.fillStyle = skin;
+    ctx.fillRect(cx-8, armY, 4, 3);
+    ctx.fillRect(cx+4, armY+Math.sin(af*0.5+1)*2, 4, 3);
+    // Keyboard glow
+    ctx.fillStyle = `rgba(30,144,255,${0.15+Math.sin(af*0.3)*0.1})`;
+    ctx.fillRect(cx-6, cy+8+bob, 12, 3);
+  }
+
+  // Walk legs
+  if (st === 'walk') {
+    const legL = Math.sin(ch.walkPhase) * 3;
+    const legR = -legL;
+    ctx.fillStyle = skin;
+    ctx.fillRect(cx-4, cy+6+bob+legL, 3, 5);
+    ctx.fillRect(cx+1, cy+6+bob+legR, 3, 5);
+  }
+
+  // Status ring (pulsing glow)
+  const ringAlpha = 0.5 + Math.sin(af*0.08)*0.4;
+  ctx.strokeStyle = ch.statusColor;
+  ctx.globalAlpha = ringAlpha;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy-3+bob, 8, 0, PI2); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Selected highlight
+  if (ch.selected) {
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.strokeRect(cx-10, cy-12+bob, 20, 24);
+    ctx.setLineDash([]);
+  }
+
+  // Name label
+  ctx.fillStyle = '#ffffffcc';
+  ctx.font = '7px "Share Tech Mono",monospace';
+  ctx.textAlign = 'center';
+  const label = (ch.sess.agent_name||'agent').slice(0,8);
+  ctx.fillRect(cx - label.length*3 - 2, cy+12+bob, label.length*6+4, 9);
+  ctx.fillStyle = '#0a0e14';
+  ctx.fillText(label, cx, cy+19+bob);
+  ctx.textAlign = 'left';
+}
+
+function drawDecorations() {
+  // Plants at corners
+  [[1,1],[COLS-3,1],[1,ROWS-4],[COLS-3,ROWS-4]].forEach(([c,r]) => {
+    drawPlant(c*TILE, r*TILE);
+  });
+  // Entry door at bottom center
+  const dc = Math.floor(COLS/2);
+  fillRect(dc*TILE, (ROWS-1)*TILE, TILE*2, TILE, '#2d3748');
+  ctx.fillStyle = '#58a6ff';
+  ctx.font = '7px monospace';
+  ctx.fillText('EXIT', dc*TILE+2, (ROWS-1)*TILE+TILE-4);
+}
+
+// ── Hit-test characters ─────────────────────────────────
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top)  * scaleY;
+  hoveredChar = null;
+  for (const ch of characters.values()) {
+    const dist = Math.sqrt((mx-ch.px)**2 + (my-ch.py)**2);
+    if (dist < 12) { hoveredChar = ch; break; }
+  }
+  const tt = document.getElementById('tooltip');
+  if (hoveredChar) {
+    const s = hoveredChar.sess;
+    document.getElementById('tt-name').textContent = s.agent_name || 'Agent';
+    document.getElementById('tt-agent').textContent = `Status: ${s.status}`;
+    document.getElementById('tt-tokens').textContent = `Tokens: ${(s.prompt_tokens||0)+(s.completion_tokens||0)}`;
+    document.getElementById('tt-cost').textContent = `Cost: $${(s.total_cost_usd||0).toFixed(4)}`;
+    document.getElementById('tt-since').textContent = `Since: ${(s.started_at||'').slice(11,19)}`;
+    tt.style.display = 'block';
+    tt.style.left = (e.clientX+14)+'px';
+    tt.style.top  = (e.clientY-10)+'px';
+  } else {
+    tt.style.display = 'none';
+  }
+});
+canvas.addEventListener('click', () => {
+  characters.forEach(ch => ch.selected = (ch===hoveredChar && !ch.selected));
+});
+canvas.addEventListener('mouseleave', () => {
+  document.getElementById('tooltip').style.display = 'none';
+});
+
+// ── Main game loop ──────────────────────────────────────
+function render() {
+  ctx.clearRect(0,0,W,H);
+  drawFloor();
+  drawDecorations();
+  drawZones();
+  drawCharacters();
+  // FPS
+  fpsCounter++;
+  if (Date.now()-fpsTimer > 1000) {
+    fps = fpsCounter; fpsCounter = 0; fpsTimer = Date.now();
+    document.getElementById('fps').textContent = fps+'fps | '+characters.size+' chars';
+  }
+  frame++;
+  requestAnimationFrame(render);
+}
+
+// ── Data fetching ───────────────────────────────────────
+async function fetchData() {
+  const ref = document.getElementById('refreshing');
+  ref.classList.add('show');
+  try {
+    const [tRes, sRes] = await Promise.all([
+      apiFetch('/tenants'),
+      apiFetch('/sessions'),
+    ]);
+    if (!tRes || !sRes) return;
+    tenants  = tRes.tenants  || [];
+    sessions = sRes.sessions || [];
+    buildZones(tenants);
+    syncCharacters();
+    updateSidebar();
+    updateHeader();
+    document.getElementById('conn-dot').style.background = '#3fb950';
+    document.getElementById('conn-dot').style.boxShadow = '0 0 6px #3fb950';
+    document.getElementById('conn-txt').textContent = 'live';
+    document.getElementById('last-update').textContent =
+      'Updated: ' + new Date().toLocaleTimeString('vi-VN');
+  } catch(e) {
+    document.getElementById('conn-dot').style.background = '#f85149';
+    document.getElementById('conn-dot').style.boxShadow = 'none';
+    document.getElementById('conn-txt').textContent = 'error';
+  } finally {
+    ref.classList.remove('show');
+  }
+}
+
+function updateHeader() {
+  const active = sessions.filter(s=>s.status==='active').length;
+  document.getElementById('h-active').textContent = active+' active';
+  document.getElementById('h-tenants').textContent = tenants.length+' tenants';
+}
+
+function updateSidebar() {
+  const list = document.getElementById('session-list');
+  if (!sessions.length) {
+    list.innerHTML = '<div class="empty">No sessions yet.<br>Send a heartbeat to register an agent.</div>';
+  } else {
+    list.innerHTML = sessions.map(s => `
+      <div class="session-card" onclick="selectSession('${s.session_key||s.id}')">
+        <div class="name">${escHtml(s.agent_name||'Agent')}</div>
+        <span class="cost">$${(s.total_cost_usd||0).toFixed(4)}</span>
+        <div class="status-badge ${s.status}">${s.status}</div>
+        <div class="meta" style="margin-top:4px">
+          Tokens: ${(s.prompt_tokens||0)+(s.completion_tokens||0)} | ${s.model||'—'}
+        </div>
+      </div>
+    `).join('');
+  }
+  // Stats
+  const totalTokens = sessions.reduce((a,s)=>a+(s.prompt_tokens||0)+(s.completion_tokens||0),0);
+  const totalCost   = sessions.reduce((a,s)=>a+(s.total_cost_usd||0),0);
+  document.getElementById('s-tokens').textContent = totalTokens.toLocaleString();
+  document.getElementById('s-cost').textContent   = '$'+totalCost.toFixed(4);
+  document.getElementById('s-active').textContent = sessions.filter(s=>s.status==='active').length;
+  document.getElementById('s-idle').textContent   = sessions.filter(s=>s.status==='idle').length;
+  document.getElementById('s-cnt').textContent    = tenants.length;
+}
+
+function selectSession(key) {
+  characters.forEach((ch,k) => { ch.selected = (k===key); });
+}
+function escHtml(s) { return s.replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+
+// ── Demo mode (no sessions) ─────────────────────────────
+function addDemoSessions() {
+  if (sessions.length > 0) return;
+  // Show demo characters if platform has tenants but no sessions
+  tenants.slice(0,3).forEach((t,i) => {
+    const key = 'demo_'+i;
+    if (!characters.has(key)) {
+      const fakeSess = {
+        session_key: key, tenant_id: t.id,
+        agent_name: ['sales-bot','support','analyzer'][i]||'agent',
+        status: ['active','idle','active'][i],
+        prompt_tokens: Math.floor(Math.random()*10000),
+        completion_tokens: Math.floor(Math.random()*5000),
+        total_cost_usd: Math.random()*0.5,
+        model: 'gpt-4o-mini', started_at: new Date().toISOString(),
+      };
+      sessions.push(fakeSess);
+    }
+  });
+  if (sessions.length) { syncCharacters(); updateSidebar(); updateHeader(); }
+}
+
+// ── Responsive canvas sizing ────────────────────────────
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const ww = wrap.clientWidth - 40, wh = wrap.clientHeight - 40;
+  const scale = Math.min(ww/W, wh/H);
+  canvas.style.width  = (W*scale)+'px';
+  canvas.style.height = (H*scale)+'px';
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ── Boot ────────────────────────────────────────────────
+async function boot() {
+  await fetchData();
+  // If no real sessions, show demo
+  setTimeout(addDemoSessions, 500);
+  render();
+  setInterval(async () => {
+    await fetchData();
+    addDemoSessions();
+  }, 3000);
+}
+boot();
+</script>
+</body>
+</html>
