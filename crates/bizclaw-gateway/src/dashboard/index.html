@@ -7,15 +7,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/dashboard/styles.css">
+<script type="importmap">
+{
+  "imports": {
+    "preact": "https://esm.sh/preact@10.25.4",
+    "preact/": "https://esm.sh/preact@10.25.4/",
+    "htm": "https://esm.sh/htm@3.1.1"
+  }
+}
+</script>
 </head>
 <body>
 <div id="app"></div>
 <script type="module">
 // Preact + HTM — React-like components, no build step (3KB + 700B)
-import { h, render, Component } from 'https://esm.sh/preact@10.25.4?bundle';
-import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'https://esm.sh/preact@10.25.4/hooks?bundle';
-import htm from 'https://esm.sh/htm@3.1.1?bundle';
-import { createContext } from 'https://esm.sh/preact@10.25.4?bundle';
+import { h, render, Component, createContext } from 'preact';
+import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'preact/hooks';
+import htm from 'htm';
 const html = htm.bind(h);
 
 // Make available globally for page modules
@@ -31,3 +39,4 @@ render(html`<${App} />`, document.getElementById('app'));
 </script>
 </body>
 </html>
+
