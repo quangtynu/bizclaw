@@ -11,6 +11,7 @@
 //! | grep | Search file contents with regex |
 //! | web_search | DuckDuckGo search (no key needed) |
 //! | http_request | Make HTTP requests to APIs |
+//! | browser | Chrome automation via PinchTab |
 //! | config_manager | Read/write config.toml at runtime |
 //! | memory_search | Search past conversation memory |
 //! | execute_code | Run code in 9 languages |
@@ -21,6 +22,7 @@
 //! | document_reader | Offline PDF/DOCX/XLSX/CSV reader |
 //! + MCP server tools (dynamic)
 
+pub mod browser;
 pub mod calendar;
 pub mod config_manager;
 pub mod document_reader;
@@ -83,6 +85,8 @@ impl ToolRegistry {
         // Search & network tools
         reg.register(Box::new(web_search::WebSearchTool::new()));
         reg.register(Box::new(http_request::HttpRequestTool::new()));
+        // Browser automation (PinchTab)
+        reg.register(Box::new(browser::BrowserTool::new()));
         // Config & code tools
         reg.register(Box::new(config_manager::ConfigManagerTool::new()));
         reg.register(Box::new(execute_code::ExecuteCodeTool::new()));
@@ -154,6 +158,7 @@ mod tests {
         assert!(reg.get("grep").is_some());
         assert!(reg.get("web_search").is_some());
         assert!(reg.get("http_request").is_some());
+        assert!(reg.get("browser").is_some());
         assert!(reg.get("config_manager").is_some());
         assert!(reg.get("execute_code").is_some());
         assert!(reg.get("plan").is_some());
@@ -170,8 +175,8 @@ mod tests {
     fn test_registry_list() {
         let reg = ToolRegistry::with_defaults();
         let defs = reg.list();
-        // 13 default tools (memory_search + session_context added separately)
-        assert!(defs.len() >= 13, "Expected >= 13 tools, got {}", defs.len());
+        // 14 default tools (memory_search + session_context added separately)
+        assert!(defs.len() >= 14, "Expected >= 14 tools, got {}", defs.len());
         assert!(defs.iter().any(|d| d.name == "plan"));
         assert!(defs.iter().any(|d| d.name == "execute_code"));
     }
