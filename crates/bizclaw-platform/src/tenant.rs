@@ -361,14 +361,22 @@ port = {}
         let stdout = log_file.as_ref().map(|f| std::process::Stdio::from(f.try_clone().unwrap())).unwrap_or(std::process::Stdio::null());
         let stderr = log_file.map(std::process::Stdio::from).unwrap_or(std::process::Stdio::null());
 
-        let child = Command::new(bizclaw_bin)
-            .args(["serve", "--port", &tenant.port.to_string()])
+        let mut cmd = Command::new(bizclaw_bin);
+        cmd.args(["serve", "--port", &tenant.port.to_string()])
             .env("BIZCLAW_CONFIG", config_path.to_str().unwrap_or(""))
-            .env("BIZCLAW_DATA_DIR", tenant_dir.to_str().unwrap_or(""))
+            .env("BIZCLAW_DATA_DIR", tenant_dir.to_str().unwrap_or(""));
+
+        // Pass pairing code directly via env var — most reliable method
+        if let Some(ref code) = tenant.pairing_code {
+            cmd.env("BIZCLAW_PAIRING_CODE", code);
+        }
+
+        let child = cmd
             .stdout(stdout)
             .stderr(stderr)
             .spawn()
             .map_err(|e| BizClawError::provider(format!("Failed to start tenant: {e}")))?;
+
 
         let pid = child.id();
         self.processes.insert(
