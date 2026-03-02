@@ -131,7 +131,7 @@ pub async fn register_handler(
     
     // Find unique slug
     {
-        let db = state.db.lock().unwrap();
+        let db = state.db.lock().await;
         let mut counter = 1;
         while db.is_slug_taken(&final_slug) {
             final_slug = format!("{}-{}", base_slug, counter);
@@ -139,7 +139,7 @@ pub async fn register_handler(
         }
     }
 
-    let db = state.db.lock().unwrap();
+    let db = state.db.lock().await;
     
     // Check if user already exists
     if let Ok(Some(_)) = db.get_user_by_email(&req.email) {
@@ -190,7 +190,7 @@ pub async fn change_password_handler(
     }
 
     let current_user_opt = {
-        let db = state.db.lock().unwrap();
+        let db = state.db.lock().await;
         db.get_user_by_email(&claims.email)
     };
     
@@ -201,7 +201,7 @@ pub async fn change_password_handler(
         if is_valid {
             let new_pwd = req.new_password.clone();
             if let Ok(Ok(new_hash)) = tokio::task::spawn_blocking(move || crate::auth::hash_password(&new_pwd)).await {
-                let db = state.db.lock().unwrap();
+                let db = state.db.lock().await;
                 if db.update_user_password(&id, &new_hash).is_ok() {
                     db.log_event("password_changed", "user", &id, None).ok();
                     return Json(serde_json::json!({"ok": true}));
@@ -242,7 +242,7 @@ pub async fn forgot_password_handler(
     let expires_at = chrono::Utc::now().timestamp() + 3600; // 1 hour validity
 
     {
-        let db = state.db.lock().unwrap();
+        let db = state.db.lock().await;
         if let Ok(Some(_)) = db.get_user_by_email(&req.email) {
             db.save_password_reset_token(&req.email, &token, expires_at).ok();
             
@@ -309,7 +309,7 @@ pub async fn reset_password_handler(
     }
 
     let reset_info = {
-        let db = state.db.lock().unwrap();
+        let db = state.db.lock().await;
         match db.get_password_reset_email(&req.token) {
             Ok(email) => {
                 if let Ok(Some((id, _, _))) = db.get_user_by_email(&email) {
@@ -325,7 +325,7 @@ pub async fn reset_password_handler(
     if let Some((email, id)) = reset_info {
         let new_pwd = req.new_password.clone();
         if let Ok(Ok(hash)) = tokio::task::spawn_blocking(move || crate::auth::hash_password(&new_pwd)).await {
-            let db = state.db.lock().unwrap();
+            let db = state.db.lock().await;
             if db.update_user_password(&id, &hash).is_ok() {
                 db.delete_password_reset_token(&email).ok();
                 db.log_event("password_reset", "user", &id, None).ok();

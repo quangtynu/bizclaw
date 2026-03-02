@@ -10,7 +10,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -163,14 +163,14 @@ async fn main() -> Result<()> {
 
     // Build admin state
     let state = Arc::new(bizclaw_platform::admin::AdminState {
-        db: Mutex::new(db),
-        manager: Mutex::new(bizclaw_platform::TenantManager::new(&data_dir)),
+        db: tokio::sync::Mutex::new(db),
+        manager: tokio::sync::Mutex::new(bizclaw_platform::TenantManager::new(&data_dir)),
         jwt_secret,
         bizclaw_bin: cli.bizclaw_bin.clone(),
         base_port: cli.base_port,
         domain: cli.domain.clone(),
-        login_attempts: Mutex::new(std::collections::HashMap::new()),
-        register_attempts: Mutex::new(std::collections::HashMap::new()),
+        login_attempts: std::sync::Mutex::new(std::collections::HashMap::new()),
+        register_attempts: std::sync::Mutex::new(std::collections::HashMap::new()),
     });
 
     // Start server
@@ -195,18 +195,16 @@ async fn main() -> Result<()> {
 
     // Auto-restart tenants that were previously running
     {
-        let db_lock = state.db.lock().unwrap();
+        let db_lock = state.db.lock().await;
         match db_lock.list_tenants() {
             Ok(tenants) => {
-                let running: Vec<_> = tenants.iter().filter(|t| t.status == "running").collect();
+                let running: Vec<_> = tenants.iter().filter(|t| t.status == "running").cloned().collect();
                 if !running.is_empty() {
                     println!("🔄 Auto-restarting {} tenant(s)...", running.len());
-                    // We need to keep our own Vec since we're about to drop the lock
-                    let running_owned: Vec<_> = running.into_iter().cloned().collect();
                     drop(db_lock); // Release lock before starting tenants
-                    for tenant in &running_owned {
-                        let db = state.db.lock().unwrap();
-                        let mut mgr = state.manager.lock().unwrap();
+                    for tenant in &running {
+                        let db = state.db.lock().await;
+                        let mut mgr = state.manager.lock().await;
                         match mgr.start_tenant(tenant, &state.bizclaw_bin, &db) {
                             Ok(pid) => {
                                 println!(

@@ -347,19 +347,11 @@ CREATE TABLE IF NOT EXISTS workflow_steps (
 CREATE INDEX IF NOT EXISTS idx_wf_steps_run ON workflow_steps(run_id);
 
 -- ════════════════════════════════════════════════
--- 6. SEED DATA — Default admin + built-in skills
+-- 6. SEED DATA — Built-in skills only
+-- NOTE: Admin user is created by the Rust application
+-- on first boot (platform_main.rs) — never hardcode
+-- credentials in migration scripts.
 -- ════════════════════════════════════════════════
-
--- Default admin user (password: BizClaw@2026)
--- bcrypt hash for 'BizClaw@2026'
-INSERT INTO users (id, email, password_hash, role, status)
-VALUES (
-    uuid_generate_v4(),
-    'admin@bizclaw.vn',
-    '$2b$12$LJ3m4ys.xZKKEfKMO.gVNOWqH/Kg7WRtGG3FLxD.TA0eN0/XBYgfi',
-    'superadmin',
-    'active'
-) ON CONFLICT (email) DO NOTHING;
 
 -- Built-in skills
 INSERT INTO skills (name, slug, description, category, language, is_builtin, entry_point) VALUES
