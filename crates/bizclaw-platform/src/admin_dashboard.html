@@ -956,7 +956,8 @@ function showPage(p, updateHash = true){
   });
 
   // Update hash in URL (e.g. #/tenants)
-  if(updateHash){
+  // Don't update hash for tenant-detail — it uses #/tenants/{id} set by openTenantDetail
+  if(updateHash && p !== 'tenant-detail'){
     const hash = '#/' + (p === 'dashboard' ? 'dashboard' : p);
     if(window.location.hash !== hash){
       window.location.hash = hash;
