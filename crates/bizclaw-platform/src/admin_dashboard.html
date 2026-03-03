@@ -238,6 +238,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
   <a href="#/teams" data-page="teams"><span class="nav-icon">🐜</span> <span>Agent Teams</span></a>
   <a href="#/audit" data-page="audit"><span class="nav-icon">📋</span> <span>Audit Log</span></a>
   <a href="#/ollama" data-page="ollama"><span class="nav-icon">🧠</span> <span>Ollama</span></a>
+  <a href="#/wiki" data-page="wiki"><span class="nav-icon">📖</span> <span>Wiki & Guide</span></a>
   <a href="#/profile" data-page="profile"><span class="nav-icon">👤</span> <span>Profile</span></a>
   <div class="bottom">
     <a href="#" onclick="logout()">⏏ Logout</a>
@@ -408,7 +409,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
         <button class="btn btn-primary btn-sm" onclick="showAddAgentForm()">+ Thêm Agent</button>
       </div>
       <div id="add-agent-form" class="card hidden" style="margin-bottom:15px">
-        <h3 style="margin-bottom:8px">🤖 New Agent</h3>
+        <h3 id="ag-form-title" style="margin-bottom:8px">🤖 New Agent</h3>
+        <input type="hidden" id="ag-edit-mode" value="">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
           <div><label style="font-size:11px;color:var(--muted)">Name</label><input id="ag-name" placeholder="sales-bot" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:13px"></div>
           <div><label style="font-size:11px;color:var(--muted)">Role</label><input id="ag-role" value="assistant" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:13px"></div>
@@ -420,8 +422,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
         </div>
         <div style="margin-top:8px"><label style="font-size:11px;color:var(--muted)">System Prompt</label><textarea id="ag-prompt" placeholder="You are..." style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:monospace;min-height:60px"></textarea></div>
         <div style="display:flex;gap:6px;margin-top:8px">
-          <button class="btn btn-primary btn-sm" onclick="createTenantAgent()">💾 Tạo</button>
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('add-agent-form').classList.add('hidden')">Huỷ</button>
+          <button id="ag-submit-btn" class="btn btn-primary btn-sm" onclick="createTenantAgent()">💾 Tạo</button>
+          <button class="btn btn-outline btn-sm" onclick="cancelAgentForm()">Huỷ</button>
         </div>
       </div>
       <div id="agents-list"></div>
@@ -553,7 +555,115 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg)
     </div>
   </div>
 
+  <!-- Wiki & Guide Page -->
+  <div id="page-wiki" class="hidden">
+    <h1>📖 Wiki & Guide <button class="btn btn-outline btn-sm" onclick="toggleWikiSearch()" style="margin-left:12px">🔍 Search</button></h1>
+    <div id="wiki-search-bar" class="hidden" style="margin-bottom:16px">
+      <input type="text" id="wiki-search-input" placeholder="Tìm kiếm trong wiki..." oninput="searchWiki(this.value)" style="width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+    </div>
+    <div class="grid" style="grid-template-columns:220px 1fr;gap:20px">
+      <!-- Sidebar TOC -->
+      <div class="card" style="position:sticky;top:20px;align-self:start">
+        <h3 style="font-size:13px;margin-bottom:12px;color:var(--accent)">📑 Mục lục</h3>
+        <div id="wiki-toc" style="font-size:13px;line-height:2"></div>
+      </div>
+      <!-- Content -->
+      <div id="wiki-content" class="card" style="min-height:400px;font-size:14px;line-height:1.8"></div>
+    </div>
+  </div>
+
 </main>
+
+<!-- Welcome Onboarding Modal -->
+<div id="modal-onboarding" class="modal-overlay hidden">
+  <div class="modal" style="min-width:550px;max-width:650px;text-align:center">
+    <div id="onboard-step-1">
+      <div style="font-size:48px;margin-bottom:16px">🎉</div>
+      <h2 style="color:var(--accent);margin-bottom:8px">Chào mừng đến BizClaw!</h2>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:20px">Nền tảng quản trị AI Agent đa kênh cho doanh nghiệp. Hãy cùng thiết lập hệ thống trong vài bước đơn giản.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;text-align:center">
+        <div class="card" style="padding:16px"><div style="font-size:28px;margin-bottom:6px">🏢</div><div style="font-size:12px;color:var(--muted)">Tạo Tenant</div></div>
+        <div class="card" style="padding:16px"><div style="font-size:28px;margin-bottom:6px">🤖</div><div style="font-size:12px;color:var(--muted)">Cấu hình Agent</div></div>
+        <div class="card" style="padding:16px"><div style="font-size:28px;margin-bottom:6px">📱</div><div style="font-size:12px;color:var(--muted)">Kết nối kênh</div></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-primary" onclick="onboardNext(2)">🚀 Bắt đầu</button>
+        <button class="btn btn-outline" onclick="skipOnboarding()">Bỏ qua</button>
+      </div>
+    </div>
+    <div id="onboard-step-2" class="hidden">
+      <h2 style="margin-bottom:12px">🏢 Bước 1: Tạo Tenant đầu tiên</h2>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Tenant là một AI agent độc lập với cấu hình, model và kênh giao tiếp riêng.</p>
+      <div style="text-align:left;background:var(--card);border-radius:8px;padding:16px;margin-bottom:16px;font-size:13px;line-height:1.8">
+        <strong>Cách tạo:</strong><br>
+        1. Vào <strong>Tenants</strong> → Click <strong>"+ New Tenant"</strong><br>
+        2. Nhập <strong>Name</strong> (tên hiển thị) và <strong>Slug</strong> (URL)<br>
+        3. Chọn <strong>Provider</strong> (OpenAI, Anthropic, Ollama...)<br>
+        4. Chọn <strong>Model</strong> (gpt-4o-mini, claude-3-haiku...)<br>
+        5. Click <strong>Create</strong> — Tenant tự động khởi động
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-outline" onclick="onboardNext(1)">← Quay lại</button>
+        <button class="btn btn-primary" onclick="onboardNext(3)">Tiếp tục →</button>
+      </div>
+    </div>
+    <div id="onboard-step-3" class="hidden">
+      <h2 style="margin-bottom:12px">🤖 Bước 2: Cấu hình Agent</h2>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Mỗi tenant có thể có nhiều agent với vai trò khác nhau.</p>
+      <div style="text-align:left;background:var(--card);border-radius:8px;padding:16px;margin-bottom:16px;font-size:13px;line-height:1.8">
+        <strong>Cấu hình agent:</strong><br>
+        1. Vào <strong>Tenant Detail</strong> → tab <strong>Agents</strong><br>
+        2. Click <strong>"+ Thêm Agent"</strong><br>
+        3. Đặt <strong>Name</strong>, <strong>Role</strong>, <strong>System Prompt</strong><br>
+        4. Chọn provider/model riêng cho agent (nếu muốn)<br>
+        5. Click <strong>Tạo</strong> — có thể edit lại bất cứ lúc nào
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-outline" onclick="onboardNext(2)">← Quay lại</button>
+        <button class="btn btn-primary" onclick="onboardNext(4)">Tiếp tục →</button>
+      </div>
+    </div>
+    <div id="onboard-step-4" class="hidden">
+      <h2 style="margin-bottom:12px">📱 Bước 3: Kết nối kênh</h2>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Kết nối agent với Telegram, Zalo, Discord, Email, WhatsApp hoặc Webhook.</p>
+      <div style="text-align:left;background:var(--card);border-radius:8px;padding:16px;margin-bottom:16px;font-size:13px;line-height:1.8">
+        <strong>Kết nối Telegram:</strong><br>
+        1. Tạo bot trên <strong>@BotFather</strong> → lấy <strong>Token</strong><br>
+        2. Vào <strong>Tenant Detail</strong> → tab <strong>Channels</strong><br>
+        3. Bật <strong>Telegram</strong> → Paste <strong>Bot Token</strong><br>
+        4. Click <strong>💾 Lưu</strong> — Bot sẽ active ngay lập tức!
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-outline" onclick="onboardNext(3)">← Quay lại</button>
+        <button class="btn btn-primary" onclick="completeOnboarding()">✅ Hoàn thành!</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Chat Guide Widget -->
+<div id="ai-chat-widget" style="position:fixed;bottom:24px;right:24px;z-index:9999">
+  <div id="ai-chat-window" class="hidden" style="width:380px;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden;margin-bottom:12px">
+    <div style="padding:14px 18px;background:linear-gradient(135deg,var(--accent),#6366f1);color:#fff;display:flex;justify-content:space-between;align-items:center;border-radius:16px 16px 0 0">
+      <div><strong>🤖 BizClaw Guide</strong><div style="font-size:11px;opacity:0.8">Hỏi bất cứ điều gì về nền tảng</div></div>
+      <button onclick="toggleChatWidget()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div id="ai-chat-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div class="chat-msg bot" style="background:var(--card);padding:10px 14px;border-radius:12px 12px 12px 4px;font-size:13px;line-height:1.6;max-width:90%">
+        👋 Xin chào! Tôi là trợ lý BizClaw. Hỏi tôi về:<br>
+        • Cách tạo và quản lý tenant<br>
+        • Cấu hình agent và channels<br>
+        • Thiết lập model AI<br>
+        • Quản lý users và permissions
+      </div>
+    </div>
+    <div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <input id="ai-chat-input" placeholder="Hỏi gì đó..." onkeydown="if(event.key==='Enter')sendChatMessage()" style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+      <button onclick="sendChatMessage()" class="btn btn-primary btn-sm" style="padding:8px 14px">📤</button>
+    </div>
+  </div>
+  <button id="ai-chat-fab" onclick="toggleChatWidget()" style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#6366f1);border:none;color:#fff;font-size:24px;cursor:pointer;box-shadow:0 4px 16px rgba(99,102,241,0.4);transition:transform 0.2s" onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">💬</button>
+</div>
 
 <!-- Team Template Detail Modal -->
 <div id="modal-team-detail" class="modal-overlay hidden">
@@ -938,6 +1048,7 @@ const ROUTE_MAP = {
   '/teams': 'teams',
   '/audit': 'audit',
   '/ollama': 'ollama',
+  '/wiki': 'wiki',
   '/profile': 'profile',
 };
 
@@ -1005,6 +1116,7 @@ function loadPage(){
   else if(currentPage==='teams')loadTeams();
   else if(currentPage==='audit')loadAudit();
   else if(currentPage==='ollama')loadOllama();
+  else if(currentPage==='wiki')loadWiki('getting-started');
 }
 
 // Load tenant detail from URL hash (e.g. after F5 or direct navigation)
@@ -1985,10 +2097,35 @@ async function saveTenantConfig() {
 
 function showAddAgentForm() {
   document.getElementById('add-agent-form').classList.remove('hidden');
+  document.getElementById('ag-form-title').textContent = '🤖 New Agent';
+  document.getElementById('ag-submit-btn').textContent = '💾 Tạo';
+  document.getElementById('ag-edit-mode').value = '';
   document.getElementById('ag-name').value = '';
+  document.getElementById('ag-name').disabled = false;
   document.getElementById('ag-role').value = 'assistant';
   document.getElementById('ag-desc').value = '';
   document.getElementById('ag-prompt').value = '';
+  if(document.getElementById('ag-provider')) document.getElementById('ag-provider').value = 'openai';
+  if(document.getElementById('ag-model')) document.getElementById('ag-model').value = '';
+}
+function editTenantAgent(name, role, desc, provider, model, prompt) {
+  document.getElementById('add-agent-form').classList.remove('hidden');
+  document.getElementById('ag-form-title').textContent = '✏️ Edit Agent: ' + name;
+  document.getElementById('ag-submit-btn').textContent = '💾 Cập nhật';
+  document.getElementById('ag-edit-mode').value = name;
+  document.getElementById('ag-name').value = name;
+  document.getElementById('ag-name').disabled = true;
+  document.getElementById('ag-role').value = role || 'assistant';
+  document.getElementById('ag-desc').value = desc || '';
+  if(document.getElementById('ag-provider')) document.getElementById('ag-provider').value = provider || 'openai';
+  if(document.getElementById('ag-model')) document.getElementById('ag-model').value = model || '';
+  document.getElementById('ag-prompt').value = prompt || '';
+  document.getElementById('add-agent-form').scrollIntoView({behavior:'smooth'});
+}
+function cancelAgentForm() {
+  document.getElementById('add-agent-form').classList.add('hidden');
+  document.getElementById('ag-edit-mode').value = '';
+  document.getElementById('ag-name').disabled = false;
 }
 
 async function loadTenantAgents() {
@@ -2005,6 +2142,7 @@ async function loadTenantAgents() {
               <span style="margin-left:8px">${providerBadge(a.provider,a.model)}</span>
             </div>
             <div style="display:flex;gap:6px">
+              <button class="btn btn-outline btn-sm" onclick="editTenantAgent('${esc(a.name)}','${esc(a.role)}','${esc(a.description||'')}','${esc(a.provider||'')}','${esc(a.model||'')}','${esc(a.system_prompt||'')}')" title="Edit agent">✏️</button>
               <button class="btn btn-danger btn-sm" onclick="deleteTenantAgent('${esc(a.name)}')" title="Delete agent">✕</button>
             </div>
           </div>
@@ -2033,8 +2171,9 @@ async function createTenantAgent() {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
     })).json();
     if(r.ok) {
-      toast(`✅ Agent "${body.name}" created!`);
-      document.getElementById('add-agent-form').classList.add('hidden');
+      const mode = document.getElementById('ag-edit-mode').value;
+      toast(`✅ Agent "${body.name}" ${mode ? 'updated' : 'created'}!`);
+      cancelAgentForm();
       loadTenantAgents();
     } else { toast(r.error||'Create failed', 'error'); }
   } catch(e) { toast('❌ '+e.message, 'error'); }
@@ -2604,8 +2743,245 @@ async function checkPlatformHealth(){
 }
 setInterval(checkPlatformHealth, 30000); // Check every 30s
 
+// ── Wiki & Guide ──────────────────────────────
+const WIKI_ARTICLES = [
+  {id:'getting-started', icon:'🚀', title:'Bắt đầu sử dụng', content:`
+    <h2>🚀 Bắt đầu sử dụng BizClaw</h2>
+    <p>BizClaw là nền tảng quản trị AI Agent đa kênh cho doanh nghiệp. Bạn có thể triển khai nhiều AI agent, mỗi agent có model, system prompt và kênh giao tiếp riêng.</p>
+    <h3>Yêu cầu tối thiểu</h3>
+    <ul>
+      <li><strong>Server:</strong> VPS 2GB RAM, Ubuntu/Debian</li>
+      <li><strong>Docker:</strong> Docker Engine + Docker Compose</li>
+      <li><strong>Domain:</strong> Domain chính + wildcard subdomain (*.bizclaw.vn)</li>
+      <li><strong>AI API Key:</strong> OpenAI, Anthropic, hoặc Ollama local</li>
+    </ul>
+    <h3>Luồng hoạt động</h3>
+    <ol>
+      <li>Đăng nhập Admin Dashboard</li>
+      <li>Tạo Tenant (AI Agent instance)</li>
+      <li>Cấu hình AI Provider & Model</li>
+      <li>Thêm Agent với System Prompt</li>
+      <li>Kết nối kênh giao tiếp (Telegram, Zalo...)</li>
+      <li>Pair thiết bị (nếu dùng hardware)</li>
+    </ol>`},
+  {id:'tenant-management', icon:'🏢', title:'Quản lý Tenant', content:`
+    <h2>🏢 Quản lý Tenant</h2>
+    <p>Tenant là đơn vị cơ bản trong BizClaw — mỗi tenant là một AI agent instance độc lập.</p>
+    <h3>Tạo Tenant mới</h3>
+    <ol>
+      <li>Vào <strong>Tenants</strong> → Click <strong>"+ New Tenant"</strong></li>
+      <li><strong>Name:</strong> Tên hiển thị (VD: "Sales Bot")</li>
+      <li><strong>Slug:</strong> URL identifier (VD: "sales" → sales.bizclaw.vn)</li>
+      <li><strong>Provider:</strong> OpenAI, Anthropic, Ollama, Gemini, DeepSeek, Groq</li>
+      <li><strong>Model:</strong> gpt-4o-mini, claude-3-haiku, llama3.2, v.v.</li>
+    </ol>
+    <h3>Xem chi tiết</h3>
+    <p>Click <strong>"Detail"</strong> để xem thông tin tenant với 5 tab: Overview, Settings, Agents, Channels, Model.</p>
+    <h3>Thao tác</h3>
+    <ul>
+      <li><strong>▶ Start / ⏹ Stop:</strong> Bật/tắt tenant</li>
+      <li><strong>🔄 Restart:</strong> Khởi động lại</li>
+      <li><strong>🔑 Reset Pairing:</strong> Tạo mã ghép nối mới</li>
+      <li><strong>✕ Delete:</strong> Xóa tenant vĩnh viễn</li>
+    </ul>`},
+  {id:'agent-config', icon:'🤖', title:'Cấu hình Agent', content:`
+    <h2>🤖 Cấu hình Agent</h2>
+    <p>Mỗi tenant có thể có nhiều agent — mỗi agent có model, system prompt riêng.</p>
+    <h3>Thêm Agent</h3>
+    <ol>
+      <li>Vào Tenant Detail → tab <strong>Agents</strong></li>
+      <li>Click <strong>"+ Thêm Agent"</strong></li>
+      <li>Nhập Name, Role, Provider, Model, System Prompt</li>
+      <li>Click <strong>Tạo</strong></li>
+    </ol>
+    <h3>Sửa Agent</h3>
+    <p>Click nút <strong>✏️</strong> trên agent card → form hiện lên với dữ liệu hiện tại → sửa và nhấn <strong>Cập nhật</strong>.</p>
+    <h3>Xóa Agent</h3>
+    <p>Click nút <strong>✕</strong> → Xác nhận xóa.</p>
+    <h3>System Prompt Best Practices</h3>
+    <ul>
+      <li>Mô tả rõ vai trò: "Bạn là trợ lý bán hàng chuyên nghiệp"</li>
+      <li>Define constraints: "Chỉ trả lời trong phạm vi sản phẩm công ty"</li>
+      <li>Set tone: "Luôn thân thiện, chuyên nghiệp"</li>
+      <li>Add knowledge: "Sản phẩm: X, Y, Z. Giá: ..."</li>
+    </ul>`},
+  {id:'channel-setup', icon:'📱', title:'Thiết lập kênh', content:`
+    <h2>📱 Thiết lập kênh giao tiếp</h2>
+    <p>BizClaw hỗ trợ 6 kênh giao tiếp. Vào Tenant Detail → tab <strong>Channels</strong>.</p>
+    <h3>Telegram</h3>
+    <ol>
+      <li>Mở <strong>@BotFather</strong> trên Telegram</li>
+      <li>Gõ <code>/newbot</code> → Đặt tên → Copy <strong>Token</strong></li>
+      <li>Paste token vào field → Bật toggle → Click <strong>💾 Lưu</strong></li>
+    </ol>
+    <h3>Zalo OA</h3>
+    <ol>
+      <li>Tạo OA trên <strong>oa.zalo.me</strong></li>
+      <li>Lấy App ID, Secret Key, Access Token</li>
+      <li>Điền vào form Zalo → Click <strong>💾 Lưu</strong></li>
+    </ol>
+    <h3>Discord</h3>
+    <ol>
+      <li>Tạo bot trên <strong>Discord Developer Portal</strong></li>
+      <li>Copy Bot Token</li>
+      <li>Invite bot vào server → Paste token → <strong>💾 Lưu</strong></li>
+    </ol>
+    <h3>Webhook</h3>
+    <p>Cấu hình endpoint URL để nhận/gửi messages qua HTTP API.</p>`},
+  {id:'model-selection', icon:'🧠', title:'Model & AI Provider', content:`
+    <h2>🧠 Model & AI Provider</h2>
+    <h3>Cloud Providers</h3>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:8px">Provider</th><th style="text-align:left;padding:8px">Models</th><th style="text-align:left;padding:8px">Tốc độ</th></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">🟢 OpenAI</td><td style="padding:8px">gpt-4o, gpt-4o-mini</td><td style="padding:8px">Nhanh</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">🟤 Anthropic</td><td style="padding:8px">claude-3-haiku, claude-3-sonnet</td><td style="padding:8px">Nhanh</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">🟣 Gemini</td><td style="padding:8px">gemini-2.0-flash, gemini-pro</td><td style="padding:8px">Nhanh</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">🔷 DeepSeek</td><td style="padding:8px">deepseek-chat, deepseek-r1</td><td style="padding:8px">Trung bình</td></tr>
+      <tr><td style="padding:8px">🟠 Groq</td><td style="padding:8px">llama3-8b, mixtral-8x7b</td><td style="padding:8px">Rất nhanh</td></tr>
+    </table>
+    <h3>Local (Ollama)</h3>
+    <p>Chạy model trên server riêng — không tốn API. Vào <strong>Ollama</strong> page để pull/manage models.</p>
+    <p>Yêu cầu: 4GB+ RAM cho 3B model, 8GB+ cho 7B model.</p>`},
+  {id:'pairing', icon:'🔗', title:'Pairing & Thiết bị', content:`
+    <h2>🔗 Pairing & Thiết bị</h2>
+    <p>BizClaw hỗ trợ kết nối thiết bị phần cứng (ESP32, XiaoZhi) qua mã ghép nối.</p>
+    <h3>Cách pair</h3>
+    <ol>
+      <li>Xem <strong>Pairing Code</strong> trong Tenant Detail (6 chữ số)</li>
+      <li>Nhập mã trên thiết bị hoặc app</li>
+      <li>Thiết bị tự động kết nối qua WebSocket</li>
+    </ol>
+    <h3>Reset Pairing</h3>
+    <p>Nếu cần pair thiết bị mới, click <strong>🔑 Reset Pairing</strong> để tạo mã mới.</p>`},
+  {id:'settings-ref', icon:'⚙️', title:'Settings Reference', content:`
+    <h2>⚙️ Settings Reference</h2>
+    <p>Tab Settings trong Tenant Detail cho phép cấu hình chi tiết.</p>
+    <h3>AI Provider & Model</h3>
+    <ul>
+      <li><strong>Provider:</strong> Nhà cung cấp AI (openai, anthropic, ollama...)</li>
+      <li><strong>Model:</strong> Tên model cụ thể</li>
+      <li><strong>API Key:</strong> API key cho cloud provider</li>
+      <li><strong>API Base URL:</strong> Custom endpoint (cho self-hosted)</li>
+    </ul>
+    <h3>Identity</h3>
+    <ul>
+      <li><strong>Bot Name:</strong> Tên hiển thị của bot</li>
+      <li><strong>Persona:</strong> Mô tả ngắn về bot</li>
+      <li><strong>System Prompt:</strong> Prompt hệ thống chính</li>
+    </ul>`},
+  {id:'faq', icon:'❓', title:'FAQ', content:`
+    <h2>❓ Câu hỏi thường gặp</h2>
+    <h3>Tôi có thể tạo bao nhiêu tenant?</h3>
+    <p>Không giới hạn — tùy thuộc vào tài nguyên server. Mỗi tenant tiêu thụ khoảng 50-100MB RAM.</p>
+    <h3>Dùng model nào tốt nhất?</h3>
+    <p>Cho tốc độ: <strong>gpt-4o-mini</strong> hoặc <strong>Groq</strong>. Cho chất lượng: <strong>gpt-4o</strong> hoặc <strong>claude-3-sonnet</strong>. Cho miễn phí: <strong>Ollama</strong> local.</p>
+    <h3>Telegram bot không phản hồi?</h3>
+    <ul><li>Kiểm tra token đúng chưa</li><li>Tenant đang "running" chưa</li><li>Bot đã được add vào group với quyền admin chưa</li></ul>
+    <h3>Quên mật khẩu admin?</h3>
+    <p>Click "Quên mật khẩu" ở trang login, hoặc nhờ superadmin reset qua trang Users.</p>`}
+];
+
+function loadWiki(articleId) {
+  const toc = document.getElementById('wiki-toc');
+  const content = document.getElementById('wiki-content');
+  toc.innerHTML = WIKI_ARTICLES.map(a =>
+    `<a href="#" onclick="showWikiArticle('${a.id}');return false" style="display:block;padding:4px 8px;border-radius:6px;text-decoration:none;color:${articleId===a.id?'var(--accent)':'var(--text)'};background:${articleId===a.id?'var(--card)':'transparent'};font-weight:${articleId===a.id?'600':'400'}">${a.icon} ${a.title}</a>`
+  ).join('');
+  const article = WIKI_ARTICLES.find(a => a.id === articleId) || WIKI_ARTICLES[0];
+  content.innerHTML = article.content;
+}
+function showWikiArticle(id) { loadWiki(id); }
+function toggleWikiSearch() {
+  const bar = document.getElementById('wiki-search-bar');
+  bar.classList.toggle('hidden');
+  if(!bar.classList.contains('hidden')) document.getElementById('wiki-search-input').focus();
+}
+function searchWiki(q) {
+  const content = document.getElementById('wiki-content');
+  if(!q.trim()) { loadWiki('getting-started'); return; }
+  const results = WIKI_ARTICLES.filter(a =>
+    a.title.toLowerCase().includes(q.toLowerCase()) ||
+    a.content.toLowerCase().includes(q.toLowerCase())
+  );
+  if(!results.length) { content.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">Không tìm thấy kết quả cho "'+escapeHtml(q)+'"</p>'; return; }
+  content.innerHTML = '<h2>🔍 Kết quả: '+results.length+' bài viết</h2>' +
+    results.map(a => `<div class="card" style="margin:10px 0;cursor:pointer" onclick="showWikiArticle('${a.id}')"><strong>${a.icon} ${a.title}</strong></div>`).join('');
+}
+
+// ── Welcome Onboarding ──────────────────────────────
+function showOnboarding() {
+  document.getElementById('modal-onboarding').classList.remove('hidden');
+  onboardNext(1);
+}
+function onboardNext(step) {
+  [1,2,3,4].forEach(s => {
+    const el = document.getElementById('onboard-step-'+s);
+    if(el) el.classList.toggle('hidden', s !== step);
+  });
+}
+function skipOnboarding() {
+  localStorage.setItem('bizclaw_onboarding_done','1');
+  hideModal('modal-onboarding');
+}
+function completeOnboarding() {
+  localStorage.setItem('bizclaw_onboarding_done','1');
+  hideModal('modal-onboarding');
+  toast('🎉 Thiết lập hoàn tất! Bắt đầu tạo tenant đầu tiên.');
+  showPage('tenants');
+}
+function checkOnboarding() {
+  if(!localStorage.getItem('bizclaw_onboarding_done') && authToken) {
+    setTimeout(showOnboarding, 800);
+  }
+}
+
+// ── AI Chat Guide Widget ──────────────────────────────
+function toggleChatWidget() {
+  const win = document.getElementById('ai-chat-window');
+  win.classList.toggle('hidden');
+}
+function addChatMsg(text, isUser) {
+  const msgs = document.getElementById('ai-chat-messages');
+  const div = document.createElement('div');
+  div.style.cssText = isUser
+    ? 'background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px 12px 4px 12px;font-size:13px;line-height:1.6;max-width:85%;align-self:flex-end'
+    : 'background:var(--card);padding:10px 14px;border-radius:12px 12px 12px 4px;font-size:13px;line-height:1.6;max-width:90%';
+  div.innerHTML = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function sendChatMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const q = input.value.trim();
+  if(!q) return;
+  addChatMsg(escapeHtml(q), true);
+  input.value = '';
+  // Search wiki for answer
+  const lq = q.toLowerCase();
+  let bestMatch = null;
+  let bestScore = 0;
+  const keywords = lq.split(/\s+/);
+  WIKI_ARTICLES.forEach(a => {
+    let score = 0;
+    const haystack = (a.title + ' ' + a.content).toLowerCase();
+    keywords.forEach(k => { if(haystack.includes(k)) score += 1; });
+    if(score > bestScore) { bestScore = score; bestMatch = a; }
+  });
+  setTimeout(() => {
+    if(bestMatch && bestScore >= 1) {
+      const snippet = bestMatch.content.replace(/<[^>]+>/g,'').slice(0,300);
+      addChatMsg(`📖 <strong>${bestMatch.icon} ${bestMatch.title}</strong><br><br>${snippet}...<br><br><a href="#" onclick="showPage('wiki');showWikiArticle('${bestMatch.id}');return false" style="color:var(--accent)">📖 Xem đầy đủ trong Wiki →</a>`, false);
+    } else {
+      addChatMsg('🤔 Tôi chưa tìm thấy thông tin phù hợp. Thử hỏi về: <strong>tạo tenant</strong>, <strong>cấu hình agent</strong>, <strong>kết nối Telegram</strong>, <strong>chọn model</strong>, hoặc xem <a href="#" onclick="showPage(\'wiki\');return false" style="color:var(--accent)">📖 Wiki</a>.', false);
+    }
+  }, 400);
+}
+
 // ── Init ──────────────────────────────────
 checkAuth();
+// Show onboarding after login
+const _origHideLogin = hideLogin;
+hideLogin = function() { _origHideLogin(); setTimeout(checkOnboarding, 500); };
 </script>
 </body>
 </html>
