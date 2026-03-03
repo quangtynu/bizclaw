@@ -2253,9 +2253,6 @@ export function App() {
   const [checkingPairing, setCheckingPairing] = useState(true);
   const wsRef = useRef(null);
 
-  // Global navigate function
-  window._navigate = setPage;
-
   // Check pairing
   useEffect(() => {
     (async () => {
@@ -2357,6 +2354,9 @@ export function App() {
     }
   }, []);
 
+  // Global navigate — must be set AFTER navigate is created
+  window._navigate = navigate;
+
   const changeLang = useCallback((l) => {
     setLang(l);
     localStorage.setItem('bizclaw_lang', l);
@@ -2411,7 +2411,7 @@ export function App() {
           wsStatus=${wsStatus}
           agentName=${config?.agent_name || 'BizClaw Agent'}
         />
-        <main class="main">
+        <main class="main" key=${currentPage}>
           ${renderPage()}
         </main>
       </div>
