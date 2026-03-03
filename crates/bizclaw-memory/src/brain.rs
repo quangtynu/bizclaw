@@ -3,7 +3,7 @@
 //! ## 3 Tiers:
 //! 1. **Brain MEMORY.md** — User-curated durable memory, loaded every turn (never touched by auto-compaction)
 //! 2. **Daily Logs** — Auto-compaction summaries saved to `memory/YYYY-MM-DD.md`
-//! 3. **FTS5 Search** — Keyword search across all stored conversations (hybrid search)
+//! 3. **ByteRover Context Tree** — LLM-curated structured knowledge (`.brv/context-tree/*.md`), 92% retrieval accuracy
 //!
 //! ## Brain Workspace Files:
 //! ```text
@@ -13,6 +13,8 @@
 //! ├── USER.md          # Who the human is
 //! ├── MEMORY.md        # Long-term curated context (never auto-compacted)
 //! ├── TOOLS.md         # Environment-specific notes
+//! ├── .brv/            # ByteRover Context Tree (Layer 3)
+//! │   └── context-tree/  # LLM-curated structured knowledge
 //! └── memory/          # Daily auto-compaction logs
 //!     └── YYYY-MM-DD.md
 //! ```
@@ -80,9 +82,15 @@ impl BrainWorkspace {
 
     /// Assemble full brain context from workspace MD files.
     /// Files are re-read every turn (edit between messages = immediate effect).
+    ///
+    /// 3-Tier Memory Architecture:
+    ///   Layer 1: Brain MD files (SOUL, MEMORY, IDENTITY, etc.)
+    ///   Layer 2: Daily logs (loaded separately by DailyLogManager)
+    ///   Layer 3: ByteRover Context Tree (.brv/context-tree/*.md)
     pub fn assemble_brain(&self) -> String {
         let mut brain = String::new();
 
+        // Layer 1: Brain MD files
         for (filename, section_name) in BRAIN_FILES {
             let path = self.base_dir.join(filename);
             if let Ok(content) = std::fs::read_to_string(&path) {
@@ -95,7 +103,58 @@ impl BrainWorkspace {
             }
         }
 
+        // Layer 3: ByteRover Context Tree (if present)
+        let context_tree_dir = self.base_dir.join(".brv").join("context-tree");
+        if context_tree_dir.exists() {
+            let mut ctx_content = String::new();
+            let mut files_loaded = 0;
+            Self::collect_context_tree(&context_tree_dir, &mut ctx_content, &mut files_loaded);
+
+            if !ctx_content.is_empty() {
+                // Limit to prevent context window overflow (max ~4KB from context tree)
+                let truncated = if ctx_content.len() > 4096 {
+                    format!("{}...\n(truncated — {} total files)", &ctx_content[..4096], files_loaded)
+                } else {
+                    ctx_content
+                };
+                brain.push_str(&format!(
+                    "\n[BYTEROVER CONTEXT TREE ({} files)]\n{}\n[END BYTEROVER CONTEXT TREE]\n",
+                    files_loaded, truncated.trim()
+                ));
+            }
+        }
+
         brain
+    }
+
+    /// Recursively collect .md files from .brv/context-tree/
+    fn collect_context_tree(dir: &std::path::Path, output: &mut String, count: &mut usize) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            let mut entries: Vec<_> = entries.flatten().collect();
+            entries.sort_by_key(|e| e.file_name());
+
+            for entry in entries {
+                let path = entry.path();
+                if path.is_dir() {
+                    Self::collect_context_tree(&path, output, count);
+                } else if path.extension().map_or(false, |e| e == "md") {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        let trimmed = content.trim();
+                        if !trimmed.is_empty() {
+                            let rel_path = path
+                                .strip_prefix(dir.parent().unwrap_or(dir))
+                                .unwrap_or(&path);
+                            output.push_str(&format!(
+                                "### {}\n{}\n\n",
+                                rel_path.display(),
+                                trimmed
+                            ));
+                            *count += 1;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Check which brain files exist.
@@ -169,6 +228,12 @@ impl BrainWorkspace {
         let memory_dir = self.base_dir.join("memory");
         std::fs::create_dir_all(&memory_dir).map_err(|e| {
             bizclaw_core::error::BizClawError::Memory(format!("Create memory dir: {e}"))
+        })?;
+
+        // Create ByteRover context tree directory (Layer 3)
+        let brv_dir = self.base_dir.join(".brv").join("context-tree");
+        std::fs::create_dir_all(&brv_dir).map_err(|e| {
+            bizclaw_core::error::BizClawError::Memory(format!("Create .brv/context-tree dir: {e}"))
         })?;
 
         Ok(())
@@ -448,5 +513,26 @@ mod tests {
         let content = mgr.read_log(&today).unwrap();
         assert!(content.contains("Test summary 1"));
         assert!(content.contains("Test summary 2"));
+    }
+
+    #[test]
+    fn test_byterover_context_tree_in_brain() {
+        let tmp = TempDir::new().unwrap();
+        let ws = BrainWorkspace::new(tmp.path().to_path_buf());
+        ws.initialize().unwrap();
+
+        // Create a context tree file
+        let ctx_dir = tmp.path().join(".brv").join("context-tree");
+        std::fs::create_dir_all(&ctx_dir).unwrap();
+        std::fs::write(
+            ctx_dir.join("auth.md"),
+            "# Authentication\nJWT with bcrypt, tokens expire in 24h.",
+        )
+        .unwrap();
+
+        let brain = ws.assemble_brain();
+        assert!(brain.contains("BYTEROVER CONTEXT TREE"));
+        assert!(brain.contains("JWT with bcrypt"));
+        assert!(brain.contains("1 files"));
     }
 }

@@ -1,5 +1,5 @@
 //! # BizClaw Tools
-//! Built-in tool execution system — 15+ tools for AI agent operations.
+//! Built-in tool execution system — 17+ tools for AI agent operations.
 //!
 //! ## Tool Registry
 //! | Tool | Description |
@@ -20,9 +20,12 @@
 //! | group_summarizer | Buffer + summarize group messages |
 //! | calendar | Google Calendar integration |
 //! | document_reader | Offline PDF/DOCX/XLSX/CSV reader |
+//! | brv_query | ByteRover Context Tree search (92% accuracy) |
+//! | brv_curate | Add knowledge to ByteRover Context Tree |
 //! + MCP server tools (dynamic)
 
 pub mod browser;
+pub mod byterover;
 pub mod calendar;
 pub mod config_manager;
 pub mod document_reader;
@@ -101,6 +104,18 @@ impl ToolRegistry {
         )));
         reg.register(Box::new(document_reader::DocumentReaderTool::new()));
         reg
+    }
+
+    /// Register ByteRover Context Tree tools.
+    /// Requires a workspace directory (brain dir) for the tenant.
+    pub fn register_byterover(&mut self, workspace_dir: std::path::PathBuf) {
+        self.register(Box::new(byterover::ByteRoverQueryTool::new(
+            workspace_dir.clone(),
+        )));
+        self.register(Box::new(byterover::ByteRoverCurateTool::new(
+            workspace_dir,
+        )));
+        tracing::info!("🧠 ByteRover Context Tree tools registered");
     }
 
     /// Register the memory_search tool with a shared memory backend.
