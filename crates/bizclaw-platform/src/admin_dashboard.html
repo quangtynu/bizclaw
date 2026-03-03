@@ -2127,13 +2127,19 @@ function cancelAgentForm() {
   document.getElementById('ag-edit-mode').value = '';
   document.getElementById('ag-name').disabled = false;
 }
+function editAgentByIndex(idx) {
+  const a = window._agentsCache && window._agentsCache[idx];
+  if(!a) return;
+  editTenantAgent(a.name, a.role, a.description||'', a.provider||'', a.model||'', a.system_prompt||'');
+}
 
 async function loadTenantAgents() {
   try {
     const r = await(await authFetch(`${API}/tenants/${detailTenantId}/agents`)).json();
     const list = document.getElementById('agents-list');
+    window._agentsCache = (r.ok && r.agents) ? r.agents : [];
     if(r.ok && r.agents && r.agents.length > 0) {
-      list.innerHTML = r.agents.map(a => `
+      list.innerHTML = r.agents.map((a,idx) => `
         <div class="card" style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
@@ -2142,7 +2148,7 @@ async function loadTenantAgents() {
               <span style="margin-left:8px">${providerBadge(a.provider,a.model)}</span>
             </div>
             <div style="display:flex;gap:6px">
-              <button class="btn btn-outline btn-sm" onclick="editTenantAgent('${esc(a.name)}','${esc(a.role)}','${esc(a.description||'')}','${esc(a.provider||'')}','${esc(a.model||'')}','${esc(a.system_prompt||'')}')" title="Edit agent">✏️</button>
+              <button class="btn btn-outline btn-sm" onclick="editAgentByIndex(${idx})" title="Edit agent">✏️</button>
               <button class="btn btn-danger btn-sm" onclick="deleteTenantAgent('${esc(a.name)}')" title="Delete agent">✕</button>
             </div>
           </div>
