@@ -51,16 +51,6 @@ const appRoot = document.getElementById('app');
 
 // Initial render
 render(html`<${App} />`, appRoot);
-
-// CRITICAL: Force full unmount+remount to escape stuck __d flag.
-// Preact's component dirty flag gets stuck after initial effects,
-// preventing ALL subsequent re-renders (even with key changes).
-// Solution: render(null) first to fully tear down the stuck tree,
-// then render a fresh App that reads window.__bizclaw_page.
-window.__bizclaw_rerender = () => {
-  render(null, appRoot);  // fully unmount old tree
-  render(html`<${App} />`, appRoot);  // mount fresh
-};
 </script>
 </body>
 </html>

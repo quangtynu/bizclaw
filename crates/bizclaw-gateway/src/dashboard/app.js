@@ -2254,10 +2254,9 @@ function ChatWidget() {
 }
 
 export function App() {
-  // NAVIGATION: Use window.__bizclaw_page + top-level re-render
-  // instead of useState, because Preact's __d flag gets stuck
-  // making setState silently fail to trigger re-renders.
-  const currentPage = window.__bizclaw_page || 'dashboard';
+  // Read current page from URL (reliable since we use full page reloads)
+  const path = location.pathname.replace(/^\//, '').replace(/\/$/, '');
+  const currentPage = path || 'dashboard';
   const [lang, setLang] = useState(localStorage.getItem('bizclaw_lang') || 'vi');
   const [wsStatus, setWsStatus] = useState('disconnected');
   const [config, setConfig] = useState({});
@@ -2346,19 +2345,13 @@ export function App() {
     };
   }, [paired]);
 
-  // History API navigation
+  // History API: handle browser back/forward
   useEffect(() => {
     const handlePop = () => {
-      const path = location.pathname.replace(/^\//, '').replace(/\/$/, '');
-      const validPages = PAGES.filter(p => !p.sep).map(p => p.id);
-      window.__bizclaw_page = validPages.includes(path) ? path : 'dashboard';
-      if (window.__bizclaw_rerender) window.__bizclaw_rerender();
+      // Page reload on back/forward since we use location.pathname navigation
+      location.reload();
     };
     window.addEventListener('popstate', handlePop);
-    // Set initial page from URL (don't re-render, we're already rendering)
-    const path = location.pathname.replace(/^\//, '').replace(/\/$/, '');
-    const validPages = PAGES.filter(p => !p.sep).map(p => p.id);
-    window.__bizclaw_page = validPages.includes(path) ? path : 'dashboard';
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
