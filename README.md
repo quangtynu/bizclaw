@@ -84,15 +84,14 @@ cd bizclaw && cargo build --release
 | **🔗 MCP** | Model Context Protocol client — kết nối MCP servers bên ngoài, mở rộng tools không giới hạn |
 | **🏢 Multi-Tenant** | Admin Platform, JWT Auth, Tenant Manager, Pairing Codes, Audit Log, RBAC, Per-tenant isolation |
 | **🐘 PostgreSQL** | **MỚI v0.3** — Production database với connection pooling, 19 tables, async sqlx, persistent data |
-| **🧠 ReMe Memory** | **MỚI v0.3** — 4-type memory: Personal (preferences), Task (patterns), Tool (usage stats), Working (context compaction) + Hybrid Search |
-| **⏰ Heartbeat/Cron** | **MỚI v0.3** — Agent tự thức dậy, scheduled tasks, proactive notifications, cron expressions |
+| **🧠 3-Layer Memory** | **MỚI v0.3** — Workspace Memory (MEMORY.md) + Daily Memory (auto-log) + **Context Tree** ([ByteRover](https://www.byterover.dev/blog/curated-stateful-memory-for-openclaw)) curated 92% accuracy |
 | **🔧 Skills System** | **MỚI v0.3** — Plug-and-play skills, 10 built-in, hot-reload, per-tenant, multi-language (Python/JS/Shell) |
 | **👥 Agent Teams** | **MỚI v0.3** — Multi-agent collaboration, 5 team templates, workflow tracking, pipeline execution |
 | **🌐 Web Dashboard** | 20+ trang UI (VI/EN), WebSocket real-time, **Full CRUD trên tất cả pages**, LLM Traces, Cost Tracking, Activity Feed, **📖 Wiki & Guide tích hợp**, **🤖 AI Chat hướng dẫn sử dụng** |
 | **📱 Android Agent** | App chạy agent 24/7, Foreground Service, Accessibility Service điều khiển Facebook/Messenger/Zalo, device tools (battery/GPS/notification) |
 | **🤖 51 Agent Templates** | 13 danh mục nghiệp vụ, system prompt chuyên sâu, cài 1 click |
 | **👥 Group Chat** | Tạo nhóm agent cộng tác — gửi 1 câu hỏi, tất cả agent trong nhóm phản hồi |
-| **🧠 3-Tier Memory** | Brain workspace (SOUL.md/MEMORY.md), Daily auto-compaction, FTS5 search |
+| **🧠 3-Tier Memory** | Brain workspace (SOUL.md/MEMORY.md), Daily auto-compaction, FTS5 search, **[ByteRover Context Tree](https://www.byterover.dev/blog/curated-stateful-memory-for-openclaw)** (92% accuracy) |
 | **📚 Knowledge RAG** | Dual-mode: FTS5/BM25 (instant) + PageIndex MCP (reasoning-based, 98.7% accuracy) |
 | **⏰ Scheduler** | Tác vụ hẹn giờ, agent tự chạy background, **retry mechanism với exponential backoff** |
 | **💾 Persistence** | PostgreSQL (production) + SQLite (edge), gateway.db, agents.json backup, auto-restore |
@@ -321,6 +320,13 @@ ollama pull qwen3         # ~4.7GB
 | REMOTE | 🌐 | Kết nối VPS/Pi, chat & điều khiển agent từ xa |
 | HYBRID | 🔀 | Engine local + agent cloud cùng lúc |
 
+**On-device LLM Inference:**
+
+| Engine | Đặc điểm |
+|--------|----------|
+| 🧠 **Brain Engine** (Rust) | GGUF inference, mmap, SIMD (ARM NEON), tích hợp sẵn |
+| 🔥 **[picolm](https://github.com/wamynobe/picolm_flutter)** (C11/FFI) | Pure C, GGUF, Isolate-powered, streaming tokens, JSON mode — tải model về chạy offline trên Android |
+
 **Điều khiển BẤT KỲ app nào trên phone:**
 
 | App | Khả năng |
@@ -376,8 +382,9 @@ BizClaw is a **self-hosted AI Agent platform** built entirely in Rust. Run AI ag
 - **🤖 51 Agent Templates** — Pre-built agents for HR, Sales, Finance, Ops, Legal, Marketing, IT
 - **💰 Per-Agent Provider Selection** — Each agent picks its own LLM provider → save 60-80% on API costs
 - **👥 Group Chat** — Multi-agent collaboration with mixed providers
-- **🧠 3-Tier Memory** — Brain workspace + daily auto-compaction + FTS5 search
+- **🧠 3-Layer Memory** — Workspace Memory + Daily Memory + ByteRover Context Tree (92% curated retrieval accuracy)
 - **📚 Knowledge RAG** — Upload documents for retrieval-augmented generation
+- **📱 On-Device LLM** — picolm C11 engine via FFI, download GGUF models, run offline on Android
 - **⏰ Scheduler** — Automated tasks with agent integration
 - **🔒 Security** — AES-256, command allowlists, HMAC-SHA256, JWT + bcrypt
 
@@ -393,15 +400,7 @@ cd bizclaw && cargo build --release
 
 ### Deployment
 
-BizClaw is deployed on **2 independent domains** from the same codebase:
-
-| Domain | Landing Page | Platform Dashboard |
-|--------|-------------|--------------------|
-| **BizClaw** | [bizclaw.vn](https://bizclaw.vn) | [apps.bizclaw.vn](https://apps.bizclaw.vn) |
-| **ViAgent** | [viagent.vn](https://viagent.vn) | [apps.viagent.vn](https://apps.viagent.vn) |
-
-- Demo Tenant: `demo.bizclaw.vn` / `demo.viagent.vn`
-- Each domain runs independently with its own database, tenants, and pairing codes
+BizClaw is deployed at [bizclaw.vn](https://bizclaw.vn) — self-hosted, no cloud lock-in.
 
 ### 🔗 Links
 
@@ -410,8 +409,8 @@ BizClaw is deployed on **2 independent domains** from the same codebase:
 | 🌐 **Website** | [https://bizclaw.vn](https://bizclaw.vn) |
 | 📘 **Fanpage** | [https://www.facebook.com/bizclaw.vn](https://www.facebook.com/bizclaw.vn) |
 | 💻 **GitHub** | [https://github.com/nguyenduchoai/bizclaw](https://github.com/nguyenduchoai/bizclaw) |
-
-| 🟢 **ViAgent** | [https://viagent.vn](https://viagent.vn) |
+| 📖 **ByteRover Memory** | [Curated Stateful Memory for OpenClaw](https://www.byterover.dev/blog/curated-stateful-memory-for-openclaw) |
+| 📱 **picolm Flutter** | [On-Device LLM Inference](https://github.com/wamynobe/picolm_flutter) |
 
 ---
 
