@@ -13,6 +13,7 @@ import vn.bizclaw.app.ui.agents.AgentsScreen
 import vn.bizclaw.app.ui.chat.ChatScreen
 import vn.bizclaw.app.ui.chat.ChatViewModel
 import vn.bizclaw.app.ui.dashboard.DashboardScreen
+import vn.bizclaw.app.ui.localllm.LocalLLMScreen
 import vn.bizclaw.app.ui.settings.SettingsScreen
 import vn.bizclaw.app.ui.theme.BizClawTheme
 
@@ -32,7 +33,7 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class Screen {
-    Chat, Agents, Settings, Dashboard
+    Chat, Agents, Settings, Dashboard, LocalLLM
 }
 
 @Composable
@@ -56,6 +57,7 @@ fun BizClawNavHost() {
                 onOpenAgents = { currentScreen = Screen.Agents },
                 onOpenSettings = { currentScreen = Screen.Settings },
                 onOpenDashboard = { currentScreen = Screen.Dashboard },
+                onOpenLocalLLM = { currentScreen = Screen.LocalLLM },
             )
         }
 
@@ -84,6 +86,12 @@ fun BizClawNavHost() {
 
         Screen.Dashboard -> {
             DashboardScreen(
+                onBack = { currentScreen = Screen.Chat },
+            )
+        }
+
+        Screen.LocalLLM -> {
+            LocalLLMScreen(
                 onBack = { currentScreen = Screen.Chat },
             )
         }

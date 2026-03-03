@@ -21,6 +21,19 @@ android {
         // BizClaw server defaults
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://localhost:3001\"")
         buildConfigField("String", "APP_VERSION", "\"0.3.0\"")
+
+        // NDK — only ARM64 (primary) + x86_64 (emulator)
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    // PicoLM C engine build via CMake
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {

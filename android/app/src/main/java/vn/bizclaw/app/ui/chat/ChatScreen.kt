@@ -29,6 +29,7 @@ fun ChatScreen(
     onOpenAgents: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenDashboard: () -> Unit = {},
+    onOpenLocalLLM: () -> Unit = {},
 ) {
     val messages = viewModel.messages
     val isLoading by viewModel.isLoading
@@ -72,6 +73,9 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenLocalLLM) {
+                        Icon(Icons.Default.Memory, contentDescription = "Local LLM")
+                    }
                     IconButton(onClick = onOpenDashboard) {
                         Icon(Icons.Default.Dashboard, contentDescription = "Dashboard")
                     }
