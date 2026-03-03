@@ -199,10 +199,22 @@ static XAI_MODELS: &[ModelDef] = &[
 
 static MODELARK_MODELS: &[ModelDef] = &[
     ModelDef {
-        id: "seed-1-6-250915",
-        name: "Seed 1.6",
+        id: "seed-2-0-mini-260215",
+        name: "Seed 2.0 Mini (Agentic)",
         context_length: 128000,
         max_output_tokens: Some(16384),
+    },
+    ModelDef {
+        id: "seed-1-8-251228",
+        name: "Seed 1.8 (Deep Thinking)",
+        context_length: 128000,
+        max_output_tokens: Some(16384),
+    },
+    ModelDef {
+        id: "deepseek-v3-2-251201",
+        name: "DeepSeek V3 (ModelArk)",
+        context_length: 128000,
+        max_output_tokens: Some(8192),
     },
     ModelDef {
         id: "doubao-1-5-pro-256k-250115",
@@ -215,6 +227,12 @@ static MODELARK_MODELS: &[ModelDef] = &[
         name: "Doubao 1.5 Pro 32K",
         context_length: 32000,
         max_output_tokens: Some(16384),
+    },
+    ModelDef {
+        id: "glm-4-7-251222",
+        name: "GLM 4.7 (Zhipu)",
+        context_length: 128000,
+        max_output_tokens: Some(8192),
     },
 ];
 

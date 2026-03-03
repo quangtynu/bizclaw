@@ -259,6 +259,13 @@ impl GatewayDb {
                 r#"["VLLM_API_KEY"]"#,
                 r#"["default"]"#,
             ),
+            (
+                "modelark", "BytePlus ModelArk", "🔥", "cloud",
+                "https://ark.ap-southeast.bytepluses.com/api/v3",
+                "/chat/completions", "/models", "bearer",
+                r#"["ARK_API_KEY","VOLC_ACCESSKEY"]"#,
+                r#"["seed-2-0-mini-260215","seed-1-8-251228","deepseek-v3-2-251201","doubao-1-5-pro-256k-250115","doubao-1-5-pro-32k-250115","glm-4-7-251222"]"#,
+            ),
         ];
 
         for (name, label, icon, ptype, base_url, chat_path, models_path, auth_style, env_keys, models) in defaults {
@@ -629,7 +636,7 @@ mod tests {
     fn test_default_providers_seeded() {
         let db = temp_db();
         let providers = db.list_providers("").unwrap();
-        assert!(providers.len() >= 14, "Should have at least 14 default providers, got {}", providers.len());
+        assert!(providers.len() >= 15, "Should have at least 15 default providers, got {}", providers.len());
         
         let openai = providers.iter().find(|p| p.name == "openai").unwrap();
         assert_eq!(openai.provider_type, "cloud");
