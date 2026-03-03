@@ -1,14 +1,14 @@
 // BizClaw Dashboard — Main App Component
 // Preact + HTM, no build step required
 //
-// IMPORTANT: Import Preact directly instead of relying on window globals.
-// Using window.useState etc. from index.html causes ESM scope issues where
-// hooks lose their connection to the Preact rendering context, resulting in
-// state updates (e.g., setPage) not triggering component re-renders.
-import { h, createContext } from 'preact';
-import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'preact/hooks';
-import htm from 'htm';
-const html = htm.bind(h);
+// CRITICAL: Do NOT import preact/hooks/htm here!
+// esm.sh CDN creates SEPARATE Preact instances for 'preact' and 'preact/hooks'
+// (the dual-package hazard). If app.js imports its own copy, useState/setPage
+// register with Preact Instance B while render() uses Instance A → no re-renders.
+//
+// Solution: Use window.* globals set by index.html from a single import chain.
+const { h, html, render, createContext,
+        useState, useEffect, useContext, useCallback, useRef, useMemo } = window;
 
 import { vi } from '/static/dashboard/i18n/vi.js';
 import { en } from '/static/dashboard/i18n/en.js';
