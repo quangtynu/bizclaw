@@ -191,6 +191,21 @@ impl PgDb {
             })
             .ok();
 
+        // Server Provisioner migration — Remote server management
+        let sp_sql = include_str!("../../../migrations/004_server_provisioner.sql");
+        sqlx::raw_sql(sp_sql)
+            .execute(self.pool())
+            .await
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("already exists") || msg.contains("duplicate key") {
+                    tracing::debug!("PG server-provisioner migration: already applied");
+                    return BizClawError::Memory("OK".into());
+                }
+                BizClawError::Memory(format!("PG server-provisioner migration error: {e}"))
+            })
+            .ok();
+
         Ok(())
     }
 

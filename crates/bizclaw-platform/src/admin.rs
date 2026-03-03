@@ -149,6 +149,11 @@ impl AdminServer {
             // ── MISSION CONTROL: GitHub Issues Sync ────────────────────────
             .route("/api/admin/tenants/{id}/github-syncs", get(mc_list_github_syncs).post(mc_upsert_github_sync))
             .route("/api/admin/tenants/{id}/github-syncs/{repo}/trigger", post(mc_trigger_github_sync))
+            // ── CLOUD: Remote Server Provisioner ────────────────────────────
+            .route("/api/admin/servers", get(srv_list_servers).post(srv_provision))
+            .route("/api/admin/servers/{sid}", get(srv_get_server).delete(srv_delete_server))
+            .route("/api/admin/servers/{sid}/health", get(srv_health_check))
+            .route("/api/admin/servers/{sid}/command", post(srv_execute_command))
             // ── MISSION CONTROL: Webhooks ───────────────────────────────────
             .route("/api/admin/tenants/{id}/webhooks", get(mc_list_webhooks))
             .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
@@ -2377,3 +2382,183 @@ async fn mc_list_webhooks(
         None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
     }
 }
+
+// ════════════════════════════════════════════════════════════════
+// CLOUD: Remote Server Provisioner Handlers
+// ════════════════════════════════════════════════════════════════
+
+async fn srv_list_servers(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+) -> Json<serde_json::Value> {
+    if !is_super_admin(&claims) {
+        return Json(serde_json::json!({ "ok": false, "error": "Superadmin required" }));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.list_servers().await {
+            Ok(servers) => Json(serde_json::json!({ "ok": true, "servers": servers })),
+            Err(e) => internal_error("srv_list_servers", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn srv_provision(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Json(req): Json<crate::server_provisioner::ProvisionRequest>,
+) -> Json<serde_json::Value> {
+    if !is_super_admin(&claims) {
+        return Json(serde_json::json!({ "ok": false, "error": "Superadmin required" }));
+    }
+    let pg = match &state.pg_db {
+        Some(pg) => pg,
+        None => return Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    };
+
+    // Register server in DB
+    let port = req.port.unwrap_or(3001);
+    match pg.register_server(&req.name, &req.ip, req.domain.as_deref(), port).await {
+        Ok(server) => {
+            let server_id = server.id.clone();
+            let pg_clone = pg.clone();
+
+            // Provision asynchronously
+            tokio::spawn(async move {
+                match crate::server_provisioner::provision_server(&req).await {
+                    Ok(result) => {
+                        let status = if result.success { "online" } else { "error" };
+                        let _ = pg_clone.update_server_health(
+                            &server_id, status, None, 0, None, None, None,
+                        ).await;
+                        tracing::info!("Provision completed for {}: {}", server_id, result.message);
+                    }
+                    Err(e) => {
+                        let _ = pg_clone.update_server_health(
+                            &server_id, "error", None, 0, None, None, None,
+                        ).await;
+                        tracing::error!("Provision failed for {}: {}", server_id, e);
+                    }
+                }
+            });
+
+            Json(serde_json::json!({
+                "ok": true,
+                "server": server,
+                "message": "Provisioning started — check status in a few minutes",
+            }))
+        }
+        Err(e) => internal_error("srv_provision", e),
+    }
+}
+
+async fn srv_get_server(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(sid): Path<String>,
+) -> Json<serde_json::Value> {
+    if !is_super_admin(&claims) {
+        return Json(serde_json::json!({ "ok": false, "error": "Superadmin required" }));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.list_servers().await {
+            Ok(servers) => match servers.into_iter().find(|s| s.id == sid) {
+                Some(server) => Json(serde_json::json!({ "ok": true, "server": server })),
+                None => Json(serde_json::json!({ "ok": false, "error": "Server not found" })),
+            },
+            Err(e) => internal_error("srv_get_server", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn srv_delete_server(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(sid): Path<String>,
+) -> Json<serde_json::Value> {
+    if !is_super_admin(&claims) {
+        return Json(serde_json::json!({ "ok": false, "error": "Superadmin required" }));
+    }
+    match &state.pg_db {
+        Some(pg) => match pg.delete_server(&sid).await {
+            Ok(_) => Json(serde_json::json!({ "ok": true, "deleted": true })),
+            Err(e) => internal_error("srv_delete_server", e),
+        },
+        None => Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    }
+}
+
+async fn srv_health_check(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(sid): Path<String>,
+) -> Json<serde_json::Value> {
+    if !is_super_admin(&claims) {
+        return Json(serde_json::json!({ "ok": false, "error": "Superadmin required" }));
+    }
+    let pg = match &state.pg_db {
+        Some(pg) => pg,
+        None => return Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    };
+
+    let servers = pg.list_servers().await.unwrap_or_default();
+    match servers.into_iter().find(|s| s.id == sid) {
+        Some(server) => {
+            let health = crate::server_provisioner::health_check(&server.ip, server.port).await;
+            let status = if health.online { "online" } else { "offline" };
+            let _ = pg.update_server_health(
+                &sid, status, health.version.as_deref(), health.tenants,
+                health.cpu, health.ram, health.disk,
+            ).await;
+            Json(serde_json::json!({ "ok": true, "health": health }))
+        }
+        None => Json(serde_json::json!({ "ok": false, "error": "Server not found" })),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct SrvCommandReq {
+    action: String,
+}
+
+async fn srv_execute_command(
+    State(state): State<Arc<AdminState>>,
+    Extension(claims): Extension<crate::auth::Claims>,
+    Path(sid): Path<String>,
+    Json(cmd): Json<SrvCommandReq>,
+) -> Json<serde_json::Value> {
+    if !is_super_admin(&claims) {
+        return Json(serde_json::json!({ "ok": false, "error": "Superadmin required" }));
+    }
+    let pg = match &state.pg_db {
+        Some(pg) => pg,
+        None => return Json(serde_json::json!({ "ok": false, "error": "PostgreSQL required" })),
+    };
+
+    let servers = pg.list_servers().await.unwrap_or_default();
+    match servers.into_iter().find(|s| s.id == sid) {
+        Some(server) => {
+            let remote_cmd = match cmd.action.as_str() {
+                "restart" => "systemctl restart bizclaw",
+                "stop" => "systemctl stop bizclaw",
+                "start" => "systemctl start bizclaw",
+                "status" => "systemctl status bizclaw --no-pager",
+                "update" => "cd /opt/bizclaw && git pull origin master && cargo build --release && systemctl restart bizclaw",
+                "logs" => "journalctl -u bizclaw -n 100 --no-pager",
+                "version" => "/opt/bizclaw/bizclaw-platform --version 2>/dev/null || echo 'unknown'",
+                _ => return Json(serde_json::json!({
+                    "ok": false,
+                    "error": format!("Unknown action: {}. Use: restart, stop, start, status, update, logs, version", cmd.action),
+                })),
+            };
+
+            match crate::server_provisioner::remote_exec(&server.ip, remote_cmd).await {
+                Ok(output) => Json(serde_json::json!({ "ok": true, "output": output })),
+                Err(e) => Json(serde_json::json!({ "ok": false, "error": e.to_string() })),
+            }
+        }
+        None => Json(serde_json::json!({ "ok": false, "error": "Server not found" })),
+    }
+}
+

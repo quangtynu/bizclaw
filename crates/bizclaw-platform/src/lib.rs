@@ -12,6 +12,7 @@ pub mod db;
 pub mod db_pg;
 pub mod enterprise;
 pub mod mission_control;
+pub mod server_provisioner;
 pub mod tenant;
 pub mod self_serve;
 
@@ -20,4 +21,5 @@ pub use db::PlatformDb;
 pub use db_pg::PgDb;
 pub use enterprise::{TenantRole, TenantMember, TenantInvitation, HandoffSession, HandoffMessage, AnalyticsSummary, QuotaStatus};
 pub use mission_control::{Task, TaskComment, QualityReview, AgentSession, GithubSync, KANBAN_COLUMNS};
+pub use server_provisioner::{RemoteServer, ProvisionRequest};
 pub use tenant::TenantManager;

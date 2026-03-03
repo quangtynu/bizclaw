@@ -249,6 +249,129 @@ cargo build --release
 - Mỗi tenant có subdomain riêng (demo.bizclaw.vn, sales.bizclaw.vn)
 - JWT authentication + per-tenant SQLite DB
 
+### 🏗️ Cài Đặt Tenant Độc Lập (VPS)
+
+Cài BizClaw riêng trên VPS của bạn — không cần server trung gian.
+
+**Yêu cầu tối thiểu:**
+- Ubuntu 22.04+ / Debian 12+
+- 1 vCPU, 1GB RAM (2GB+ recommended)
+- Domain trỏ về IP server
+
+#### Quick Install (1 lệnh)
+
+```bash
+# Cài tự động — chỉ cần domain và email
+curl -sSL https://bizclaw.vn/install.sh | sudo bash -s -- \
+  --domain bot.company.vn \
+  --admin-email admin@company.vn
+```
+
+Script tự động:
+1. ✅ Cài PostgreSQL 16 + tạo database
+2. ✅ Tải BizClaw binary (hoặc build từ source)
+3. ✅ Tạo config.toml
+4. ✅ Setup Nginx reverse proxy
+5. ✅ Cài SSL (Let's Encrypt)
+6. ✅ Tạo systemd service (auto-restart)
+
+#### Manual Install
+
+```bash
+# 1. Cài dependencies
+sudo apt update && sudo apt install -y postgresql nginx certbot
+
+# 2. Setup PostgreSQL
+sudo -u postgres createdb bizclaw
+sudo -u postgres psql -c "CREATE USER bizclaw WITH PASSWORD 'your_password';"
+sudo -u postgres psql -c "GRANT ALL ON DATABASE bizclaw TO bizclaw;"
+
+# 3. Build BizClaw
+git clone https://github.com/nguyenduchoai/bizclaw.git
+cd bizclaw && cargo build --release
+
+# 4. Tạo config
+cat > config.toml << 'EOF'
+[server]
+host = "127.0.0.1"
+port = 3001
+
+[database]
+url = "postgres://bizclaw:your_password@localhost/bizclaw"
+
+[admin]
+username = "admin"
+# Password được hash tự động khi init
+EOF
+
+# 5. Initialize database
+./target/release/bizclaw-platform init
+
+# 6. Tạo systemd service
+sudo tee /etc/systemd/system/bizclaw.service << 'EOF'
+[Unit]
+Description=BizClaw AI Agent Platform
+After=network.target postgresql.service
+
+[Service]
+ExecStart=/opt/bizclaw/bizclaw-platform --config /opt/bizclaw/config.toml
+Restart=always
+User=bizclaw
+WorkingDirectory=/opt/bizclaw
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now bizclaw
+
+# 7. Nginx + SSL
+sudo tee /etc/nginx/sites-available/bizclaw << 'EOF'
+server {
+    server_name bot.company.vn;
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+EOF
+
+sudo ln -sf /etc/nginx/sites-available/bizclaw /etc/nginx/sites-enabled/
+sudo certbot --nginx -d bot.company.vn
+sudo systemctl reload nginx
+```
+
+Sau khi cài xong, truy cập `https://bot.company.vn` để sử dụng.
+
+### ☁️ Cloud Management (bizclaw.vn)
+
+BizClaw hỗ trợ quản lý remote servers từ bizclaw.vn:
+
+```
+┌─────────────────────────────────────────────────┐
+│  bizclaw.vn (Control Plane)                      │
+│  ┌──────────────────────────────────────────┐    │
+│  │ Server Management Dashboard              │    │
+│  │  [+ Add Server]                          │    │
+│  │  ┌────────────┬──────────┬─────────┐     │    │
+│  │  │ Server A   │ ✅ Online │ v0.3.0  │     │    │
+│  │  │ Server B   │ ✅ Online │ v0.3.0  │     │    │
+│  │  │ Server C   │ ⚠️ Update │ v0.2.9  │     │    │
+│  │  └────────────┴──────────┴─────────┘     │    │
+│  └──────────────────────────────────────────┘    │
+│         │                                        │
+│  Provision: SSH → install.sh → done              │
+│  Monitor: Health check mỗi 60s                   │
+│  Manage: Restart, Stop, Update, View Logs        │
+└─────────────────────────────────────────────────┘
+```
+
+Khách hàng chỉ cần cung cấp **IP + root password** → BizClaw tự cài đặt và quản lý.
+
 ### 🔗 MCP (Model Context Protocol) Support
 
 BizClaw hỗ trợ kết nối **MCP Servers** — mở rộng tools không giới hạn mà không cần rebuild:
@@ -316,16 +439,43 @@ ollama pull qwen3         # ~4.7GB
 
 | Mode | Emoji | Mô tả |
 |------|-------|--------|
-| LOCAL | 📱 | Rust engine chạy trên phone, Ollama local, $0, không cần internet |
+| LOCAL | 📱 | **llama.cpp** on-device, AI Agent điều khiển apps, $0, 100% offline |
 | REMOTE | 🌐 | Kết nối VPS/Pi, chat & điều khiển agent từ xa |
 | HYBRID | 🔀 | Engine local + agent cloud cùng lúc |
 
-**On-device LLM Inference:**
+**On-device LLM Inference (llama.cpp):**
 
-| Engine | Đặc điểm |
-|--------|----------|
-| 🧠 **Brain Engine** (Rust) | GGUF inference, mmap, SIMD (ARM NEON), tích hợp sẵn |
-| 🔥 **[picolm](https://github.com/wamynobe/picolm_flutter)** (C11/FFI) | Pure C, GGUF, Isolate-powered, streaming tokens, JSON mode — tải model về chạy offline trên Android |
+| Model | Size | Đặc điểm |
+|-------|------|----------|
+| 🧠 **Qwen3 4B Q4_K_M** | 2.7 GB | Best balance — tool calling tốt |
+| 🔥 **Qwen3 8B Q4_K_M** | 5.1 GB | Powerful — cho phones có NPU |
+| ⚡ **TinyLlama 1.1B** | 638 MB | Siêu nhanh, mọi phone |
+| 🧪 **DeepSeek R1 1.5B** | 1.1 GB | Reasoning |
+| 🔬 **Phi-4 Mini 3.8B** | 2.4 GB | Microsoft reasoning |
+
+CPU auto-detection: ARMv8.2 (fp16, dotprod), ARMv8.4 (SVE, i8mm) — **8 library variants** tối ưu hiệu năng.
+
+**🤖 On-Device Agent — AI tự hành động trên phone:**
+
+```
+User: "Post lên Facebook: BizClaw ra mắt v0.3!"
+                ↓
+  BizClawLLM (llama.cpp, Qwen3)
+                ↓ parse tool_call
+  LocalAgentLoop (Think-Act-Observe, 5 rounds max)
+                ↓
+  ToolDispatcher → AppController.facebookPost()
+                ↓
+  ✅ "Đã đăng lên Facebook thành công"
+```
+
+| Category | Tools (20 tools) |
+|----------|------------------|
+| 📱 Social | `facebook_post`, `facebook_comment`, `messenger_reply`, `messenger_read`, `zalo_send` |
+| 🖥️ Screen | `screen_read`, `screen_click`, `screen_type`, `screen_tap`, `screen_swipe`, `screen_scroll` |
+| 🔧 System | `open_app`, `open_url`, `device_info`, `press_back`, `press_home`, `press_enter`, `notifications` |
+
+> **Tất cả chạy 100% offline.** Không cần server, không API key, $0 cost.
 
 **Điều khiển BẤT KỲ app nào trên phone:**
 
@@ -338,6 +488,9 @@ ollama pull qwen3         # ~4.7GB
 
 | Component | Chức năng |
 |-----------|----------|
+| `BizClawLLM` | llama.cpp wrapper, GGUF model, streaming, CPU feature detection |
+| `LocalAgentLoop` | Think-Act-Observe loop, tool_call parsing, 5 rounds max |
+| `ToolDispatcher` | 20 tools mapping → AppController/AccessibilityService |
 | `BizClawDaemonService` | Foreground service 24/7, WakeLock, auto-restart |
 | `BizClawAccessibilityService` | Điều khiển UI: đọc, click, gõ, swipe, tap toạ độ |
 | `AppController` | Workflow: Facebook post, Messenger reply, Zalo send |
@@ -350,7 +503,7 @@ ollama pull qwen3         # ~4.7GB
 |--------|-------|
 | **Language** | 100% Rust + Kotlin (Android) |
 | **Crates** | 17 |
-| **Lines of Code** | ~41,000 (Rust 38K + Kotlin 3K) |
+| **Lines of Code** | ~43,000 (Rust 38K + Kotlin 5K) |
 | **Tests** | 240 passing |
 | **Clippy Warnings** | **0** ✅ |
 | **Providers** | 16 built-in + custom endpoint |
@@ -384,7 +537,7 @@ BizClaw is a **self-hosted AI Agent platform** built entirely in Rust. Run AI ag
 - **👥 Group Chat** — Multi-agent collaboration with mixed providers
 - **🧠 3-Layer Memory** — Workspace Memory + Daily Memory + ByteRover Context Tree (92% curated retrieval accuracy)
 - **📚 Knowledge RAG** — Upload documents for retrieval-augmented generation
-- **📱 On-Device LLM** — picolm C11 engine via FFI, download GGUF models, run offline on Android
+- **📱 On-Device LLM Agent** — llama.cpp engine (8 CPU-optimized variants), download GGUF models, 20 device tools, Think-Act-Observe agent loop, run offline on Android
 - **⏰ Scheduler** — Automated tasks with agent integration
 - **🔒 Security** — AES-256, command allowlists, HMAC-SHA256, JWT + bcrypt
 
@@ -410,7 +563,8 @@ BizClaw is deployed at [bizclaw.vn](https://bizclaw.vn) — self-hosted, no clou
 | 📘 **Fanpage** | [https://www.facebook.com/bizclaw.vn](https://www.facebook.com/bizclaw.vn) |
 | 💻 **GitHub** | [https://github.com/nguyenduchoai/bizclaw](https://github.com/nguyenduchoai/bizclaw) |
 | 📖 **ByteRover Memory** | [Curated Stateful Memory for OpenClaw](https://www.byterover.dev/blog/curated-stateful-memory-for-openclaw) |
-| 📱 **picolm Flutter** | [On-Device LLM Inference](https://github.com/wamynobe/picolm_flutter) |
+| 🧠 **llama.cpp** | [On-Device LLM Engine](https://github.com/ggerganov/llama.cpp) |
+| 📱 **SmolChat-Android** | [Reference Architecture](https://github.com/shubham0204/SmolChat-Android) |
 
 ---
 

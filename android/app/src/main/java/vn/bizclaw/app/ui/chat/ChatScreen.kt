@@ -325,6 +325,33 @@ fun ChatBubble(message: UiMessage) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
 
+                // Tool actions log (for agent mode)
+                if (message.toolActions.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF1B5E20).copy(alpha = 0.1f),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Text(
+                                "🔧 Agent Actions",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF00E676),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = message.toolActions.trim(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                lineHeight = 16.sp,
+                            )
+                        }
+                    }
+                }
+
                 // Streaming indicator
                 if (message.isStreaming) {
                     Spacer(Modifier.height(4.dp))

@@ -13,6 +13,8 @@ import vn.bizclaw.app.data.model.AgentInfo
 import vn.bizclaw.app.data.model.ChatMessage
 import vn.bizclaw.app.engine.BizClawLLM
 import vn.bizclaw.app.engine.ModelDownloadManager
+import vn.bizclaw.app.service.AgentToken
+import vn.bizclaw.app.service.LocalAgentLoop
 
 data class UiMessage(
     val role: String,
@@ -22,6 +24,7 @@ data class UiMessage(
     val tokensUsed: Int = 0,
     val isLocal: Boolean = false,       // On-device inference
     val tokPerSec: Float = 0f,          // Local LLM speed
+    val toolActions: String = "",        // Tool execution log for this message
 )
 
 /**
@@ -52,6 +55,10 @@ class ChatViewModel : ViewModel() {
     val localModelLoading = mutableStateOf(false)
     val localGenSpeed = mutableStateOf(0f)
     val localContextUsed = mutableStateOf(0)
+    val agentMode = mutableStateOf(true) // true = full agent (tools), false = chat only
+
+    // Agent loop (created when context is available)
+    private var agentLoop: LocalAgentLoop? = null
 
     // List of downloaded GGUF models on device
     val localModels = mutableStateListOf<Pair<String, String>>() // name, path
@@ -97,12 +104,15 @@ class ChatViewModel : ViewModel() {
         localModels.clear()
         localModels.addAll(models)
 
+        // Create/update agent loop
+        agentLoop = LocalAgentLoop(localLLM, context)
+
         // If no cloud agents loaded yet, add "local" agent
         if (localModels.isNotEmpty() && agents.none { it.name == "local" }) {
             agents.add(0, AgentInfo(
                 name = "local",
-                role = "On-Device AI",
-                description = "Chạy trực tiếp trên điện thoại — 100% offline",
+                role = "On-Device AI Agent",
+                description = "Chạy trực tiếp trên điện thoại — 100% offline, điều khiển apps",
                 model = localModelName.value ?: "local-gguf",
                 status = if (localLLM.isLoaded) "active" else "inactive",
             ))
@@ -122,10 +132,11 @@ class ChatViewModel : ViewModel() {
                         numThreads = Runtime.getRuntime().availableProcessors().coerceAtMost(8),
                     ),
                 )
-                localLLM.addSystemPrompt(
-                    "You are BizClaw, a helpful AI assistant for business operations. " +
-                    "Respond concisely and helpfully in the user's language."
-                )
+                // Use agent system prompt with full tool definitions
+                val systemPrompt = agentLoop?.agentSystemPrompt
+                    ?: ("You are BizClaw, a helpful AI assistant for business operations. " +
+                        "Respond concisely and helpfully in the user's language.")
+                localLLM.addSystemPrompt(systemPrompt)
                 localModelName.value = name
                 isLocalMode.value = true
                 currentAgent.value = "local"
@@ -174,7 +185,7 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    // ─── Local (On-Device) ────────────────────────────────────
+    // ─── Local (On-Device Agent) ────────────────────────────────
 
     private fun sendLocalMessage(text: String) {
         // Add user message
@@ -190,13 +201,96 @@ class ChatViewModel : ViewModel() {
             role = "assistant",
             content = "",
             isStreaming = true,
-            agentName = "BizClaw (Local)",
+            agentName = "BizClaw Agent (Local)",
             isLocal = true,
         ))
 
         isLoading.value = true
         error.value = null
 
+        val loop = agentLoop
+        if (loop != null && agentMode.value) {
+            // ═══ AGENT MODE: full Think-Act-Observe loop with tools ═══
+            sendLocalAgentMessage(text, assistantIdx, loop)
+        } else {
+            // ═══ CHAT-ONLY MODE: simple LLM response ═══
+            sendLocalChatMessage(text, assistantIdx)
+        }
+    }
+
+    /** Agent mode: LocalAgentLoop with tool execution */
+    private fun sendLocalAgentMessage(text: String, assistantIdx: Int, loop: LocalAgentLoop) {
+        viewModelScope.launch {
+            try {
+                val responseBuilder = StringBuilder()
+                val toolLog = StringBuilder()
+
+                loop.run(text).collect { token ->
+                    when (token) {
+                        is AgentToken.Text -> {
+                            responseBuilder.append(token.content)
+                            if (assistantIdx < messages.size) {
+                                messages[assistantIdx] = messages[assistantIdx].copy(
+                                    content = responseBuilder.toString(),
+                                    toolActions = toolLog.toString(),
+                                )
+                            }
+                        }
+                        is AgentToken.ToolStart -> {
+                            toolLog.appendLine("🔧 Executing: ${token.toolName}...")
+                            if (assistantIdx < messages.size) {
+                                messages[assistantIdx] = messages[assistantIdx].copy(
+                                    toolActions = toolLog.toString(),
+                                )
+                            }
+                        }
+                        is AgentToken.ToolEnd -> {
+                            val icon = if (token.result.success) "✅" else "❌"
+                            toolLog.appendLine("$icon ${token.toolName}: ${token.result.message.take(100)}")
+                            if (assistantIdx < messages.size) {
+                                messages[assistantIdx] = messages[assistantIdx].copy(
+                                    toolActions = toolLog.toString(),
+                                )
+                            }
+                        }
+                        is AgentToken.Round -> {
+                            if (token.number > 1) {
+                                responseBuilder.clear()
+                                toolLog.appendLine("\n--- Round ${token.number} ---")
+                            }
+                        }
+                        is AgentToken.Done -> {
+                            // Final update
+                            val speed = localLLM.getGenerationSpeed()
+                            val ctxUsed = localLLM.getContextUsed()
+                            localGenSpeed.value = speed
+                            localContextUsed.value = ctxUsed
+
+                            if (assistantIdx < messages.size) {
+                                messages[assistantIdx] = messages[assistantIdx].copy(
+                                    isStreaming = false,
+                                    tokPerSec = speed,
+                                    toolActions = toolLog.toString(),
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (assistantIdx < messages.size) {
+                    messages[assistantIdx] = messages[assistantIdx].copy(
+                        content = "⚠️ ${e.message}",
+                        isStreaming = false,
+                    )
+                }
+                error.value = "Agent error: ${e.message}"
+            }
+            isLoading.value = false
+        }
+    }
+
+    /** Chat-only mode: simple LLM response without tools */
+    private fun sendLocalChatMessage(text: String, assistantIdx: Int) {
         viewModelScope.launch {
             try {
                 val responseBuilder = StringBuilder()
@@ -211,7 +305,6 @@ class ChatViewModel : ViewModel() {
                         }
                     }
 
-                // Update final message with speed stats
                 val speed = localLLM.getGenerationSpeed()
                 val ctxUsed = localLLM.getContextUsed()
                 localGenSpeed.value = speed
