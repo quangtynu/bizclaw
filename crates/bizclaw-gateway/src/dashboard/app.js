@@ -2359,10 +2359,21 @@ export function App() {
   }, []);
 
   const navigate = useCallback((pageId) => {
-    console.log('[navigate] called with pageId =', pageId, 'current =', currentPage);
-    console.log('[navigate] setPage =', setPage, 'typeof =', typeof setPage);
+    console.log('[navigate] called with pageId =', pageId);
+    // WORKAROUND: Preact's __d (dirty) flag can get stuck after render errors,
+    // causing subsequent useState setters to silently skip re-rendering.
+    // We use this hack: find the component instance and force-clear __d,
+    // then call setPage, which properly enqueues a re-render.
+    const appEl = document.getElementById('app');
+    if (appEl && appEl.__k) {
+      const vn = appEl.__k;
+      const comp = vn && vn.__c;
+      if (comp && comp.__d) {
+        console.log('[navigate] Clearing stuck __d flag');
+        comp.__d = false;
+      }
+    }
     setPage(pageId);
-    console.log('[navigate] setPage called, awaiting re-render...');
     const path = '/' + (pageId === 'dashboard' ? '' : pageId);
     if (location.pathname !== path) {
       history.pushState({ page: pageId }, '', path);
