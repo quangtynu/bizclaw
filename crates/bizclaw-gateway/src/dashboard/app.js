@@ -62,6 +62,7 @@ const PAGES = [
   { id: 'sep2', sep: true },
   { id: 'brain', icon: '🧠', label: 'nav.brain' },
   { id: 'configfile', icon: '📄', label: 'nav.config' },
+  { id: 'wiki', icon: '📖', label: 'Wiki & Guide' },
 ];
 
 // ═══ TOAST ═══
@@ -1307,6 +1308,104 @@ function SkillsPage({ lang }) {
 
 
 // ═══ MAIN APP ═══
+// ═══ WIKI & GUIDE PAGE ═══
+const WIKI_ARTICLES = [
+  {id:'getting-started',icon:'🚀',title:'Bắt đầu',content:'<h2>🚀 Bắt đầu sử dụng</h2><p>Dashboard này giúp bạn quản lý AI Agent. Các tính năng chính:</p><ul><li><strong>Chat:</strong> Trò chuyện trực tiếp với AI Agent</li><li><strong>Agents:</strong> Tạo và quản lý nhiều agent</li><li><strong>Channels:</strong> Kết nối Telegram, Zalo, Discord</li><li><strong>Knowledge:</strong> Thêm tài liệu cho AI</li><li><strong>Scheduler:</strong> Lên lịch tự động</li><li><strong>Gallery:</strong> 50+ mẫu agent template</li></ul><h3>Bước đầu tiên</h3><ol><li>Vào <strong>Settings</strong> để kiểm tra provider & model</li><li>Vào <strong>Chat</strong> để thử nói chuyện</li><li>Vào <strong>Channels</strong> để kết nối messaging</li></ol>'},
+  {id:'chat-guide',icon:'💬',title:'Chat với Agent',content:'<h2>💬 Chat với Agent</h2><p>Trang Chat cho phép trò chuyện trực tiếp với AI Agent qua web.</p><h3>Cách dùng</h3><ol><li>Click <strong>Chat</strong> trên sidebar</li><li>Chọn agent trong sidebar (nếu có nhiều)</li><li>Nhập tin nhắn và nhấn Enter</li></ol><h3>Tính năng</h3><ul><li><strong>Multi-agent:</strong> Chọn agent khác nhau</li><li><strong>History:</strong> Lịch sử tự lưu</li><li><strong>Markdown:</strong> Code blocks, lists, tables</li><li><strong>Streaming:</strong> Response word-by-word</li></ul>'},
+  {id:'channels-guide',icon:'📱',title:'Kênh liên lạc',content:'<h2>📱 Cấu hình kênh</h2><p>Kết nối agent với messaging.</p><h3>Telegram</h3><ol><li>Mở @BotFather → /newbot → Copy Token</li><li>Vào Channels → Bật Telegram</li><li>Paste Bot Token → Lưu</li></ol><h3>Zalo OA</h3><ol><li>Tạo OA tại oa.zalo.me</li><li>Lấy App ID, Secret Key, Access Token</li><li>Điền form → Lưu</li></ol><h3>Khác</h3><ul><li><strong>Discord:</strong> Bot Token</li><li><strong>Email:</strong> IMAP/SMTP</li><li><strong>Webhook:</strong> Custom endpoint</li></ul>'},
+  {id:'knowledge-guide',icon:'📚',title:'Kho tri thức',content:'<h2>📚 Kho tri thức (RAG)</h2><p>Thêm tài liệu để AI trả lời chính xác hơn.</p><h3>Thêm tài liệu</h3><ol><li>Vào Kho tri thức → "+ Thêm tài liệu"</li><li>Upload hoặc paste nội dung</li><li>Lưu — hệ thống tự chia chunks</li></ol><h3>Best Practices</h3><ul><li>Upload FAQ, product catalog, SOP</li><li>Chia tài liệu dài thành nhiều file</li><li>Dùng tiêu đề rõ ràng</li></ul>'},
+  {id:'scheduler-guide',icon:'⏰',title:'Lịch trình',content:'<h2>⏰ Lịch trình tự động</h2><p>Agent tự chạy prompt theo lịch.</p><h3>Tạo tác vụ</h3><ol><li>Vào Lịch trình → "+ Thêm tác vụ"</li><li>Chọn Agent, nhập Prompt</li><li>Nhập Cron expression</li><li>Chọn kênh nhận kết quả</li></ol><h3>Cron cheat sheet</h3><p><code>0 9 * * *</code> = 9:00 mỗi ngày<br><code>*/30 * * * *</code> = mỗi 30 phút<br><code>0 8 * * 1</code> = 8:00 T2</p>'},
+  {id:'agents-guide',icon:'🤖',title:'Multi-Agent',content:'<h2>🤖 Quản lý Agent</h2><p>Tạo nhiều agent với vai trò khác nhau.</p><h3>Tạo Agent</h3><ol><li>Vào AI Agent → "+ Tạo Agent"</li><li>Đặt tên, vai trò, provider/model</li><li>Viết System Prompt</li></ol><h3>Gán kênh</h3><p>Click ✏️ Sửa → "Gán Agent với Kênh" → chọn kênh.</p><h3>Gallery Skills</h3><p>Vào Gallery duyệt 50+ template theo ngành.</p>'}
+];
+
+function WikiPage({ lang }) {
+  const [activeId, setActiveId] = useState('getting-started');
+  const [searchQ, setSearchQ] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+
+  const article = WIKI_ARTICLES.find(a => a.id === activeId) || WIKI_ARTICLES[0];
+  const results = searchQ ? WIKI_ARTICLES.filter(a =>
+    a.title.toLowerCase().includes(searchQ.toLowerCase()) ||
+    a.content.toLowerCase().includes(searchQ.toLowerCase())
+  ) : null;
+
+  return html`
+    <div class="page-header"><div><h1>📖 Wiki & Hướng dẫn</h1><div class="sub">Tài liệu hướng dẫn sử dụng hệ thống</div></div>
+      <button class="btn btn-outline btn-sm" onclick=${() => setShowSearch(!showSearch)}>🔍 Tìm kiếm</button>
+    </div>
+    ${showSearch && html`<div style="margin-bottom:16px"><input type="text" placeholder="Tìm kiếm..." value=${searchQ} onInput=${e => setSearchQ(e.target.value)} style="width:100%;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" /></div>`}
+    <div style="display:grid;grid-template-columns:200px 1fr;gap:16px">
+      <div class="card" style="position:sticky;top:20px;align-self:start">
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:10px">📑 Mục lục</div>
+        ${WIKI_ARTICLES.map(a => html`
+          <a href="#" onclick=${e => { e.preventDefault(); setActiveId(a.id); setSearchQ(''); }}
+            style="display:block;padding:3px 6px;border-radius:4px;text-decoration:none;font-size:12px;line-height:2;color:${activeId===a.id?'var(--accent)':'var(--text)'};background:${activeId===a.id?'var(--bg2)':'transparent'};font-weight:${activeId===a.id?'600':'400'}">${a.icon} ${a.title}</a>
+        `)}
+      </div>
+      <div class="card" style="min-height:400px;font-size:13px;line-height:1.8" dangerouslySetInnerHTML=${{ __html: results ? (results.length ? '<h2>🔍 '+results.length+' kết quả</h2>' + results.map(a => '<div class="card" style="margin:8px 0;cursor:pointer" onclick=""><strong>'+a.icon+' '+a.title+'</strong></div>').join('') : '<p style="color:var(--text2);text-align:center;padding:30px">Không tìm thấy</p>') : article.content }} />
+    </div>
+  `;
+}
+
+// ═══ AI CHAT WIDGET ═══
+function ChatWidget() {
+  const [open, setOpen] = useState(false);
+  const [msgs, setMsgs] = useState([
+    { from:'bot', text:'👋 Chào bạn! Hỏi về: Chat, Channels, Agent, Lịch trình, Kho tri thức...' }
+  ]);
+  const [input, setInput] = useState('');
+  const msgsRef = useRef(null);
+  const { navigate } = useContext(AppContext);
+
+  const send = () => {
+    if (!input.trim()) return;
+    const q = input.trim();
+    setMsgs(prev => [...prev, { from:'user', text: q }]);
+    setInput('');
+    const lq = q.toLowerCase();
+    let best = null, bestScore = 0;
+    WIKI_ARTICLES.forEach(a => {
+      let score = 0;
+      const hay = (a.title+' '+a.content).toLowerCase();
+      lq.split(/\s+/).forEach(k => { if(hay.includes(k)) score++; });
+      if(score > bestScore) { bestScore = score; best = a; }
+    });
+    setTimeout(() => {
+      if(best && bestScore >= 1) {
+        const snippet = best.content.replace(/<[^>]+>/g,'').slice(0,200);
+        setMsgs(prev => [...prev, { from:'bot', text: `📖 ${best.icon} ${best.title}\n\n${snippet}...\n\n→ Xem Wiki để biết thêm` }]);
+      } else {
+        setMsgs(prev => [...prev, { from:'bot', text: '🤔 Thử hỏi: chat, telegram, agent, lịch trình...' }]);
+      }
+    }, 300);
+  };
+
+  useEffect(() => { if(msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight; }, [msgs]);
+
+  return html`
+    <div style="position:fixed;bottom:20px;right:20px;z-index:9999">
+      ${open && html`
+        <div style="width:360px;height:480px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden;margin-bottom:10px">
+          <div style="padding:12px 16px;background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;display:flex;justify-content:space-between;align-items:center;border-radius:14px 14px 0 0">
+            <div><strong>🤖 Trợ lý</strong><div style="font-size:10px;opacity:0.8">Hỏi cách sử dụng</div></div>
+            <button onclick=${() => setOpen(false)} style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer">✕</button>
+          </div>
+          <div ref=${msgsRef} style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
+            ${msgs.map(m => html`
+              <div style="background:${m.from==='user'?'var(--accent)':'var(--bg2)'};color:${m.from==='user'?'#fff':'var(--text)'};padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.6;max-width:85%;align-self:${m.from==='user'?'flex-end':'flex-start'};white-space:pre-wrap">${m.text}</div>
+            `)}
+          </div>
+          <div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px">
+            <input value=${input} onInput=${e => setInput(e.target.value)} onKeyDown=${e => e.key==='Enter' && send()} placeholder="Hỏi gì đó..." style="flex:1;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px" />
+            <button onclick=${send} class="btn btn-primary btn-sm">📤</button>
+          </div>
+        </div>
+      `}
+      <button onclick=${() => setOpen(!open)} style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7c3aed);border:none;color:#fff;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(99,102,241,0.4);transition:transform 0.2s" onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">💬</button>
+    </div>
+  `;
+}
+
 export function App() {
   const [currentPage, setPage] = useState('dashboard');
   const [lang, setLang] = useState(localStorage.getItem('bizclaw_lang') || 'vi');
@@ -1459,6 +1558,7 @@ export function App() {
       case 'activity': return html`<${ActivityPage} lang=${lang} />`;
       case 'workflows': return html`<${WorkflowsPage} lang=${lang} />`;
       case 'skills': return html`<${SkillsPage} lang=${lang} />`;
+      case 'wiki': return html`<${WikiPage} lang=${lang} />`;
       default: return html`<div class="card" style="padding:40px;text-align:center"><div style="font-size:48px;margin-bottom:16px">📄</div><h2>${currentPage}</h2></div>`;
     }
   };
@@ -1479,6 +1579,7 @@ export function App() {
         </main>
       </div>
       <${Toast} ...${toast || {}} />
+      <${ChatWidget} />
     <//>
   `;
 }
