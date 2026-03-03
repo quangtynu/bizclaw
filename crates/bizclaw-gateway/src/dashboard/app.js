@@ -649,9 +649,56 @@ function HandsPage({ lang }) {
 
 // ═══ SETTINGS PAGE ═══
 function SettingsPage({ config, lang }) {
-  const [form, setForm] = useState({provider:config?.default_provider||'',model:'',agentName:config?.agent_name||'',persona:'',temperature:0.7,autonomy:'supervised'});
+  const { showToast } = useContext(AppContext);
+  const [form, setForm] = useState({provider:'',model:'',agentName:'',persona:'',temperature:0.7,autonomy:'supervised',sysprompt:''});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await authFetch('/api/v1/config');
+        const d = await r.json();
+        setForm({
+          provider: d.default_provider || '',
+          model: d.default_model || '',
+          agentName: d.agent_name || '',
+          persona: d.persona || '',
+          temperature: d.temperature || 0.7,
+          autonomy: d.autonomy || 'supervised',
+          sysprompt: d.system_prompt || ''
+        });
+      } catch(e) {}
+      setLoading(false);
+    })();
+  }, []);
+
+  const save = async () => {
+    try {
+      const body = {
+        default_provider: form.provider,
+        default_model: form.model,
+        agent_name: form.agentName,
+        persona: form.persona,
+        temperature: form.temperature,
+        autonomy: form.autonomy,
+        system_prompt: form.sysprompt
+      };
+      const r = await authFetch('/api/v1/config/update', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      const d = await r.json();
+      if(d.ok) showToast('✅ Đã lưu cấu hình', 'success');
+      else showToast('❌ ' + (d.error || 'Lỗi'), 'error');
+    } catch(e) { showToast('❌ ' + e.message, 'error'); }
+  };
+
+  if(loading) return html`<div class="card" style="text-align:center;padding:40px;color:var(--text2)">Loading...</div>`;
+
   return html`<div>
-    <div class="page-header"><div><h1>⚙️ ${t('settings.title',lang)}</h1><div class="sub">${t('settings.subtitle',lang)}</div></div></div>
+    <div class="page-header"><div><h1>⚙️ ${t('settings.title',lang)}</h1><div class="sub">${t('settings.subtitle',lang)}</div></div>
+      <button class="btn" style="background:var(--grad1);color:#fff;padding:10px 24px" onClick=${save}>💾 ${t('settings.save',lang)}</button>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div class="card"><div class="card-label">🤖 ${t('set.provider_section',lang)}</div>
         <div style="display:grid;gap:10px;font-size:13px">
@@ -663,14 +710,16 @@ function SettingsPage({ config, lang }) {
       <div class="card"><div class="card-label">🪪 ${t('set.identity',lang)}</div>
         <div style="display:grid;gap:10px;font-size:13px">
           <label>${t('set.agent_name',lang)}<input style="width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text)" value=${form.agentName} onInput=${e=>setForm(f=>({...f,agentName:e.target.value}))} /></label>
-          <label>${t('set.persona',lang)}<input style="width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text)" value=${form.persona} /></label>
-          <label>${t('set.autonomy',lang)}<select style="width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text)" value=${form.autonomy}>
+          <label>${t('set.persona',lang)}<input style="width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text)" value=${form.persona} onInput=${e=>setForm(f=>({...f,persona:e.target.value}))} /></label>
+          <label>${t('set.autonomy',lang)}<select style="width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text)" value=${form.autonomy} onChange=${e=>setForm(f=>({...f,autonomy:e.target.value}))}>
             <option value="readonly">${t('set.readonly',lang)}</option><option value="supervised">${t('set.supervised',lang)}</option><option value="full">${t('set.full',lang)}</option>
           </select></label>
         </div>
       </div>
     </div>
-    <div style="margin-top:14px;text-align:right"><button class="btn" style="background:var(--grad1);color:#fff;padding:10px 24px">${t('settings.save',lang)}</button></div>
+    <div class="card" style="margin-top:14px"><div class="card-label">📝 System Prompt</div>
+      <textarea style="width:100%;min-height:150px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;resize:vertical" value=${form.sysprompt} onInput=${e=>setForm(f=>({...f,sysprompt:e.target.value}))} placeholder="You are a helpful AI assistant..." />
+    </div>
   </div>`;
 }
 
@@ -693,32 +742,94 @@ function ProvidersPage({ config, lang }) {
   </div>`;
 }
 
-// ═══ CHANNELS PAGE ═══
+// ═══ CHANNELS PAGE (with Configure) ═══
 function ChannelsPage({ lang }) {
-  const channels = [
-    {name:'cli',icon:'💻',status:'active'},{name:'telegram',icon:'📱',status:'configured'},{name:'discord',icon:'🎮',status:'configured'},
-    {name:'email',icon:'📧',status:'configured'},{name:'webhook',icon:'🌐',status:'active'},{name:'whatsapp',icon:'💬',status:'available'},
-    {name:'zalo',icon:'💙',status:'configured'},{name:'slack',icon:'💬',status:'available'},{name:'line',icon:'📱',status:'available'},
-    {name:'teams',icon:'🏢',status:'available'},{name:'signal',icon:'🔐',status:'available'},{name:'matrix',icon:'🔲',status:'available'},
-    {name:'viber',icon:'💜',status:'available'},{name:'messenger',icon:'💙',status:'available'},{name:'mattermost',icon:'🔵',status:'available'},
-    {name:'google_chat',icon:'🟢',status:'available'},{name:'dingtalk',icon:'🔷',status:'available'},{name:'feishu',icon:'🐦',status:'available'},
-    {name:'mastodon',icon:'🐘',status:'available'},{name:'bluesky',icon:'🦋',status:'available'},{name:'nostr',icon:'🟣',status:'available'},
-    {name:'twitter',icon:'🐦',status:'available'},{name:'twilio_sms',icon:'📱',status:'available'},{name:'xmpp',icon:'💬',status:'available'},
-    {name:'webex',icon:'🌐',status:'available'},
+  const { showToast } = useContext(AppContext);
+  const [channels, setChannels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [configCh, setConfigCh] = useState(null);
+  const [chForm, setChForm] = useState({});
+
+  const builtIn = [
+    {name:'cli',icon:'💻',status:'active'},{name:'telegram',icon:'📱',status:'available',fields:['bot_token']},
+    {name:'discord',icon:'🎮',status:'available',fields:['bot_token','guild_id']},{name:'email',icon:'📧',status:'available',fields:['imap_host','smtp_host','email','password']},
+    {name:'webhook',icon:'🌐',status:'available',fields:['url','secret']},{name:'whatsapp',icon:'💬',status:'available',fields:['api_key','phone_number_id']},
+    {name:'zalo',icon:'💙',status:'available',fields:['app_id','secret_key','access_token']},{name:'slack',icon:'💬',status:'available',fields:['bot_token','app_token']},
+    {name:'line',icon:'📱',status:'available',fields:['channel_secret','channel_access_token']},
+    {name:'teams',icon:'🏢',status:'available',fields:['app_id','app_password']},
+    {name:'viber',icon:'💜',status:'available',fields:['auth_token']},
+    {name:'messenger',icon:'💙',status:'available',fields:['page_access_token','verify_token']},
   ];
+
+  const load = async () => {
+    try {
+      const r = await authFetch('/api/v1/channels');
+      const d = await r.json();
+      const apiChannels = d.channels || [];
+      const merged = builtIn.map(b => {
+        const found = apiChannels.find(c => c.name === b.name);
+        return found ? { ...b, ...found } : b;
+      });
+      setChannels(merged);
+    } catch(e) { setChannels(builtIn); }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const openConfig = (ch) => {
+    setConfigCh(ch);
+    const f = {};
+    (ch.fields || []).forEach(k => { f[k] = ch[k] || ch.config?.[k] || ''; });
+    setChForm(f);
+  };
+
+  const saveConfig = async () => {
+    try {
+      const r = await authFetch('/api/v1/agents/default/telegram', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(chForm)
+      });
+      const d = await r.json();
+      if(d.ok) { showToast('✅ Đã cấu hình '+configCh.name,'success'); setConfigCh(null); load(); }
+      else showToast('❌ '+(d.error||d.message||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
   const statusBadge = s => s==='active'?html`<span class="badge badge-green">● Active</span>`:s==='configured'?html`<span class="badge badge-blue">✓ Configured</span>`:html`<span class="badge">○ Available</span>`;
+  const inp = 'width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px';
+
   return html`<div>
-    <div class="page-header"><div><h1>📱 ${t('channels.title',lang)}</h1><div class="sub">${t('channels.subtitle',lang)} — 25+ nền tảng</div></div></div>
+    <div class="page-header"><div><h1>📱 ${t('channels.title',lang)}</h1><div class="sub">${t('channels.subtitle',lang)} — ${channels.length}+ nền tảng</div></div></div>
     <div class="stats">
       <${StatsCard} label="Total Channels" value=${channels.length} color="accent" />
       <${StatsCard} label="Active" value=${channels.filter(c=>c.status==='active').length} color="green" />
       <${StatsCard} label="Configured" value=${channels.filter(c=>c.status==='configured').length} color="blue" />
     </div>
-    <div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+
+    ${configCh && html`
+      <div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3>${configCh.icon} Cấu hình ${configCh.name}</h3>
+          <button class="btn btn-outline btn-sm" onClick=${()=>setConfigCh(null)}>✕ Đóng</button>
+        </div>
+        <div style="display:grid;gap:10px;font-size:13px">
+          ${(configCh.fields||[]).map(k => html`
+            <label key=${k}>${k}<input style="${inp}" type=${k.includes('password')||k.includes('secret')||k.includes('token')?'password':'text'} value=${chForm[k]||''} onInput=${e=>setChForm(f=>({...f,[k]:e.target.value}))} placeholder=${'Nhập '+k+'...'} /></label>
+          `)}
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline" onClick=${()=>setConfigCh(null)}>Huỷ</button>
+          <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 20px" onClick=${saveConfig}>💾 Lưu</button>
+        </div>
+      </div>
+    `}
+
+    <div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
       ${channels.map(c=>html`<div key=${c.name} style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
         <span style="font-size:22px">${c.icon}</span>
         <div style="flex:1"><strong style="font-size:13px">${c.name}</strong></div>
         ${statusBadge(c.status)}
+        ${c.fields && html`<button class="btn btn-outline btn-sm" onClick=${()=>openConfig(c)} title="Cấu hình">⚙️</button>`}
       </div>`)}
     </div></div>
   </div>`;
@@ -748,25 +859,168 @@ function ToolsPage({ lang }) {
   </div>`;
 }
 
-// ═══ AGENTS PAGE ═══
+// ═══ AGENTS PAGE (Full CRUD) ═══
 function AgentsPage({ config, lang }) {
+  const { showToast } = useContext(AppContext);
   const [agents,setAgents] = useState([]);
-  useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/agents');const d=await r.json();setAgents(d.agents||[]);}catch(e){}})(); },[]);
+  const [loading,setLoading] = useState(true);
+  const [showForm,setShowForm] = useState(false);
+  const [editAgent,setEditAgent] = useState(null);
+  const [form,setForm] = useState({name:'',role:'',description:'',system_prompt:'',provider:'',model:''});
+
+  const load = async () => {
+    try { const r=await authFetch('/api/v1/agents');const d=await r.json();setAgents(d.agents||[]); } catch(e){}
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const openCreate = () => { setEditAgent(null); setForm({name:'',role:'general',description:'',system_prompt:'',provider:config?.default_provider||'',model:config?.default_model||''}); setShowForm(true); };
+  const openEdit = (a) => { setEditAgent(a); setForm({name:a.name,role:a.role||'',description:a.description||'',system_prompt:a.system_prompt||'',provider:a.provider||'',model:a.model||''}); setShowForm(true); };
+
+  const saveAgent = async () => {
+    try {
+      if(editAgent) {
+        const r = await authFetch('/api/v1/agents/'+encodeURIComponent(editAgent.name), {
+          method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form)
+        });
+        const d=await r.json();
+        if(d.ok) { showToast('✅ Đã cập nhật agent: '+form.name,'success'); load(); setShowForm(false); }
+        else showToast('❌ '+(d.error||'Lỗi'),'error');
+      } else {
+        const r = await authFetch('/api/v1/agents', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form)
+        });
+        const d=await r.json();
+        if(d.ok) { showToast('✅ Đã tạo agent: '+form.name,'success'); load(); setShowForm(false); }
+        else showToast('❌ '+(d.error||'Lỗi'),'error');
+      }
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const deleteAgent = async (name) => {
+    if(!confirm('Xoá agent "'+name+'"?')) return;
+    try {
+      const r = await authFetch('/api/v1/agents/'+encodeURIComponent(name), {method:'DELETE'});
+      const d=await r.json();
+      if(d.ok) { showToast('🗑️ Đã xoá: '+name,'success'); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const inp = 'width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px';
+
   return html`<div>
-    <div class="page-header"><div><h1>🤖 ${t('agents.title',lang)}</h1><div class="sub">${t('agents.subtitle',lang)}</div></div></div>
+    <div class="page-header"><div><h1>🤖 ${t('agents.title',lang)}</h1><div class="sub">${t('agents.subtitle',lang)}</div></div>
+      <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 18px" onClick=${openCreate}>+ Tạo Agent</button>
+    </div>
     <div class="stats"><${StatsCard} label=${t('agents.total',lang)} value=${agents.length||1} color="accent" icon="🤖" /></div>
-    <div class="card">${agents.length===0?html`<div style="text-align:center;padding:30px;color:var(--text2)"><div style="font-size:48px;margin-bottom:12px">🤖</div><p>Default agent: <strong>${config?.agent_name||'BizClaw'}</strong></p><p style="margin-top:8px">Provider: <span class="badge badge-blue">${config?.default_provider||'—'}</span></p></div>`:html`<table><thead><tr><th>Agent</th><th>Provider</th><th>Model</th><th>Messages</th><th>Status</th></tr></thead><tbody>${agents.map(a=>html`<tr key=${a.id}><td><strong>${a.name}</strong></td><td>${a.provider}</td><td><span class="badge badge-blue">${a.model}</span></td><td>${a.message_count||0}</td><td><span class="badge badge-green">Active</span></td></tr>`)}</tbody></table>`}</div>
+
+    ${showForm && html`
+      <div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3>${editAgent ? '✏️ Sửa Agent: '+editAgent.name : '➕ Tạo Agent mới'}</h3>
+          <button class="btn btn-outline btn-sm" onClick=${()=>setShowForm(false)}>✕ Đóng</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <label>Tên Agent<input style="${inp}" value=${form.name} onInput=${e=>setForm(f=>({...f,name:e.target.value}))} placeholder="sales-bot" ${editAgent?'disabled':''} /></label>
+          <label>Vai trò<input style="${inp}" value=${form.role} onInput=${e=>setForm(f=>({...f,role:e.target.value}))} placeholder="coder, writer, analyst..." /></label>
+          <label>Provider<input style="${inp}" value=${form.provider} onInput=${e=>setForm(f=>({...f,provider:e.target.value}))} placeholder="ollama, openai..." /></label>
+          <label>Model<input style="${inp}" value=${form.model} onInput=${e=>setForm(f=>({...f,model:e.target.value}))} placeholder="llama3.2, gpt-4o..." /></label>
+          <label style="grid-column:span 2">Mô tả<input style="${inp}" value=${form.description} onInput=${e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Mô tả ngắn..." /></label>
+          <label style="grid-column:span 2">System Prompt<textarea style="${inp};min-height:80px;resize:vertical;font-family:var(--mono)" value=${form.system_prompt} onInput=${e=>setForm(f=>({...f,system_prompt:e.target.value}))} placeholder="You are a..." /></label>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline" onClick=${()=>setShowForm(false)}>Huỷ</button>
+          <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 20px" onClick=${saveAgent}>💾 ${editAgent?'Cập nhật':'Tạo'}</button>
+        </div>
+      </div>
+    `}
+
+    <div class="card">${loading?html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>`:agents.length===0?html`<div style="text-align:center;padding:30px;color:var(--text2)"><div style="font-size:48px;margin-bottom:12px">🤖</div><p>Default agent: <strong>${config?.agent_name||'BizClaw'}</strong></p><p style="margin-top:8px">Provider: <span class="badge badge-blue">${config?.default_provider||'—'}</span></p></div>`:html`
+      <table><thead><tr><th>Agent</th><th>Vai trò</th><th>Provider</th><th>Model</th><th>Messages</th><th>Status</th><th style="text-align:right">Thao tác</th></tr></thead><tbody>
+        ${agents.map(a=>html`<tr key=${a.name||a.id}>
+          <td><strong>${a.name}</strong>${a.description?html`<div style="font-size:11px;color:var(--text2)">${a.description}</div>`:''}</td>
+          <td><span class="badge">${a.role||'—'}</span></td>
+          <td>${a.provider||'—'}</td>
+          <td><span class="badge badge-blue">${a.model||'—'}</span></td>
+          <td>${a.message_count||a.messages_processed||0}</td>
+          <td><span class="badge badge-green">Active</span></td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-outline btn-sm" onClick=${()=>openEdit(a)} title="Sửa">✏️</button>
+            ${!a.is_default?html`<button class="btn btn-outline btn-sm" style="margin-left:4px;color:var(--red)" onClick=${()=>deleteAgent(a.name)} title="Xoá">🗑️</button>`:''}
+          </td>
+        </tr>`)}
+      </tbody></table>
+    `}</div>
   </div>`;
 }
 
-// ═══ KNOWLEDGE PAGE ═══
+// ═══ KNOWLEDGE PAGE (with Add/Delete) ═══
 function KnowledgePage({ lang }) {
+  const { showToast } = useContext(AppContext);
   const [docs,setDocs] = useState([]);
-  useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/knowledge/documents');const d=await r.json();setDocs(d.documents||[]);}catch(e){}})(); },[]);
+  const [loading,setLoading] = useState(true);
+  const [showAdd,setShowAdd] = useState(false);
+  const [addForm,setAddForm] = useState({name:'',content:'',source:'upload'});
+
+  const load = async () => {
+    try{const r=await authFetch('/api/v1/knowledge/documents');const d=await r.json();setDocs(d.documents||[]);}catch(e){}
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const addDoc = async () => {
+    if(!addForm.name.trim()||!addForm.content.trim()) { showToast('⚠️ Nhập tên và nội dung','error'); return; }
+    try {
+      const r = await authFetch('/api/v1/knowledge/documents', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(addForm)
+      });
+      const d=await r.json();
+      if(d.ok) { showToast('✅ Đã thêm: '+addForm.name+' ('+d.chunks+' chunks)','success'); setShowAdd(false); setAddForm({name:'',content:'',source:'upload'}); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const deleteDoc = async (id,name) => {
+    if(!confirm('Xoá tài liệu "'+name+'"?')) return;
+    try {
+      const r = await authFetch('/api/v1/knowledge/documents/'+id, {method:'DELETE'});
+      const d=await r.json();
+      if(d.ok) { showToast('🗑️ Đã xoá: '+name,'success'); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const inp = 'width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px';
+
   return html`<div>
-    <div class="page-header"><div><h1>📚 ${t('kb.title',lang)}</h1><div class="sub">${t('kb.subtitle',lang)}</div></div></div>
+    <div class="page-header"><div><h1>📚 ${t('kb.title',lang)}</h1><div class="sub">${t('kb.subtitle',lang)}</div></div>
+      <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 18px" onClick=${()=>setShowAdd(!showAdd)}>+ Thêm tài liệu</button>
+    </div>
     <div class="stats"><${StatsCard} label=${t('kb.documents',lang)} value=${docs.length} color="accent" icon="📄" /><${StatsCard} label=${t('kb.chunks',lang)} value=${docs.reduce((s,d)=>s+(d.chunks||0),0)} color="blue" icon="📝" /></div>
-    <div class="card">${docs.length===0?html`<div style="text-align:center;padding:40px;color:var(--text2)"><div style="font-size:48px;margin-bottom:12px">📚</div><p>Chưa có tài liệu. Thêm file MD, PDF, TXT để AI trả lời chính xác hơn.</p></div>`:html`<table><thead><tr><th>Document</th><th>Chunks</th><th>Source</th></tr></thead><tbody>${docs.map(d=>html`<tr key=${d.id}><td><strong>${d.title}</strong></td><td>${d.chunks}</td><td style="font-size:12px">${d.source}</td></tr>`)}</tbody></table>`}</div>
+
+    ${showAdd && html`
+      <div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+        <h3 style="margin-bottom:12px">📄 Thêm tài liệu mới</h3>
+        <div style="display:grid;gap:10px;font-size:13px">
+          <label>Tên tài liệu<input style="${inp}" value=${addForm.name} onInput=${e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="guide.md, faq.txt..." /></label>
+          <label>Nội dung<textarea style="${inp};min-height:200px;resize:vertical;font-family:var(--mono)" value=${addForm.content} onInput=${e=>setAddForm(f=>({...f,content:e.target.value}))} placeholder="Paste nội dung tài liệu vào đây... (Markdown, text, FAQ)" /></label>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline" onClick=${()=>setShowAdd(false)}>Huỷ</button>
+          <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 20px" onClick=${addDoc}>💾 Thêm</button>
+        </div>
+      </div>
+    `}
+
+    <div class="card">${loading?html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>`:docs.length===0?html`<div style="text-align:center;padding:40px;color:var(--text2)"><div style="font-size:48px;margin-bottom:12px">📚</div><p>Chưa có tài liệu. Click "+ Thêm tài liệu" để bắt đầu.</p></div>`:html`
+      <table><thead><tr><th>Tài liệu</th><th>Chunks</th><th>Source</th><th style="text-align:right">Thao tác</th></tr></thead><tbody>
+        ${docs.map(d=>html`<tr key=${d.id}><td><strong>${d.title||d.name}</strong></td><td>${d.chunks}</td><td style="font-size:12px">${d.source}</td>
+          <td style="text-align:right"><button class="btn btn-outline btn-sm" style="color:var(--red)" onClick=${()=>deleteDoc(d.id,d.title||d.name)} title="Xoá">🗑️</button></td>
+        </tr>`)}
+      </tbody></table>
+    `}</div>
   </div>`;
 }
 
@@ -857,23 +1111,98 @@ function GalleryPage({ lang }) {
   </div>`;
 }
 
-// ═══ BRAIN ENGINE PAGE ═══
+// ═══ BRAIN ENGINE PAGE (with Create/Edit/View files) ═══
 function BrainPage({ lang }) {
+  const { showToast } = useContext(AppContext);
   const [health,setHealth] = useState(null);
   const [files,setFiles] = useState([]);
-  useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/health');setHealth(await r.json());}catch(e){} try{const r2=await authFetch('/api/v1/brain/files');const d2=await r2.json();setFiles(d2.files||[]);}catch(e){}})(); },[]);
+  const [editFile,setEditFile] = useState(null);
+  const [fileContent,setFileContent] = useState('');
+  const [showNew,setShowNew] = useState(false);
+  const [newName,setNewName] = useState('');
+
+  const load = async () => {
+    try{const r=await authFetch('/api/v1/health');setHealth(await r.json());}catch(e){}
+    try{const r2=await authFetch('/api/v1/brain/files');const d2=await r2.json();setFiles(d2.files||[]);}catch(e){}
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const openFile = async (name) => {
+    try {
+      const r = await authFetch('/api/v1/brain/files/'+encodeURIComponent(name));
+      const d = await r.json();
+      setFileContent(d.content || '');
+      setEditFile(name);
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const saveFile = async () => {
+    try {
+      const r = await authFetch('/api/v1/brain/files/'+encodeURIComponent(editFile), {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({content:fileContent})
+      });
+      const d = await r.json();
+      if(d.ok) { showToast('✅ Đã lưu: '+editFile,'success'); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const createFile = async () => {
+    if(!newName.trim()) return;
+    const fname = newName.endsWith('.md') ? newName : newName + '.md';
+    try {
+      const r = await authFetch('/api/v1/brain/files/'+encodeURIComponent(fname), {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({content:'# '+fname+'\n\n'})
+      });
+      const d = await r.json();
+      if(d.ok) { showToast('✅ Đã tạo: '+fname,'success'); setShowNew(false); setNewName(''); load(); openFile(fname); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
   const checks = [
     {name:'SIMD (NEON/AVX)',status:health?.simd||'—',ok:true},{name:'Memory',status:health?.memory||'—',ok:true},
     {name:'Thread Pool',status:health?.threads||'—',ok:true},{name:'GGUF Parser',status:'ready',ok:true},
     {name:'KV Cache',status:'initialized',ok:true},{name:'Quantization',status:'Q4_K_M, Q5_K_M, Q8_0',ok:true},
   ];
+  const inp = 'width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px';
+
   return html`<div>
-    <div class="page-header"><div><h1>🧠 ${t('brain.title',lang)}</h1><div class="sub">${t('brain.ws_sub',lang)}</div></div></div>
+    <div class="page-header"><div><h1>🧠 ${t('brain.title',lang)}</h1><div class="sub">${t('brain.ws_sub',lang)}</div></div>
+      <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 18px" onClick=${()=>setShowNew(!showNew)}>+ Tạo file</button>
+    </div>
     <div class="stats">
       <${StatsCard} label=${t('brain.engine',lang)} value="BizClaw Brain" color="accent" icon="🧠" />
       <${StatsCard} label=${t('brain.quant',lang)} value="Q4-Q8" color="blue" icon="📊" />
       <${StatsCard} label=${t('brain.files_count',lang)} value=${files.length} color="green" icon="📄" />
     </div>
+
+    ${showNew && html`
+      <div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+        <h3 style="margin-bottom:8px">📄 Tạo file mới</h3>
+        <div style="display:flex;gap:8px;align-items:end">
+          <label style="flex:1">Tên file<input style="${inp}" value=${newName} onInput=${e=>setNewName(e.target.value)} placeholder="MY_FILE.md" /></label>
+          <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 16px" onClick=${createFile}>Tạo</button>
+        </div>
+      </div>
+    `}
+
+    ${editFile && html`
+      <div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3>📝 ${editFile}</h3>
+          <div style="display:flex;gap:6px">
+            <button class="btn" style="background:var(--grad1);color:#fff;padding:6px 16px" onClick=${saveFile}>💾 Lưu</button>
+            <button class="btn btn-outline btn-sm" onClick=${()=>setEditFile(null)}>✕</button>
+          </div>
+        </div>
+        <textarea value=${fileContent} onInput=${e=>setFileContent(e.target.value)}
+          style="width:100%;min-height:300px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.6;resize:vertical" />
+      </div>
+    `}
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div class="card"><h3 style="margin-bottom:12px">🏥 ${t('brain.health_title',lang)}</h3>
         <div style="display:grid;gap:6px">
@@ -885,25 +1214,40 @@ function BrainPage({ lang }) {
         </div>
       </div>
       <div class="card"><h3 style="margin-bottom:12px">📁 ${t('brain.ws_title',lang)}</h3>
-        ${files.length===0?html`<div style="text-align:center;padding:20px;color:var(--text2)"><p>Workspace trống. Các tệp persona, knowledge sẽ hiển thị ở đây.</p></div>`:html`<div style="display:grid;gap:4px">${files.map(f=>html`<div key=${f.name} style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border-radius:4px;font-size:13px">
-          <span>📄</span><span style="flex:1">${f.name}</span><span style="color:var(--text2);font-size:11px">${f.size||''}</span>
+        ${files.length===0?html`<div style="text-align:center;padding:20px;color:var(--text2)"><p>Workspace trống. Click "+ Tạo file" để bắt đầu.</p></div>`:html`<div style="display:grid;gap:4px">${files.map(f=>html`<div key=${f.name||f} style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border-radius:4px;font-size:13px;cursor:pointer" onClick=${()=>openFile(f.name||f)} onMouseOver=${e=>e.currentTarget.style.borderColor='var(--accent)'} onMouseOut=${e=>e.currentTarget.style.borderColor='transparent'}>
+          <span>📄</span><span style="flex:1">${f.name||f}</span><span style="color:var(--text2);font-size:11px">${f.size||''}</span>
+          <span class="badge badge-blue" style="font-size:10px">✏️ Edit</span>
         </div>`)}</div>`}
       </div>
     </div>
   </div>`;
 }
 
-// ═══ CONFIG FILE PAGE ═══
+// ═══ CONFIG FILE PAGE (with actual Save) ═══
 function ConfigFilePage({ lang }) {
+  const { showToast } = useContext(AppContext);
   const [content,setContent] = useState('');
   const [loading,setLoading] = useState(true);
   useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/config/full');const d=await r.json();setContent(d.content||d.raw||JSON.stringify(d,null,2)||'# config.toml not loaded');}catch(e){setContent('# Error loading config');} setLoading(false); })(); },[]);
+
+  const save = async () => {
+    try {
+      const r = await authFetch('/api/v1/config/update', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({raw:content})
+      });
+      const d = await r.json();
+      if(d.ok) showToast('✅ Config saved','success');
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
   return html`<div>
     <div class="page-header"><div><h1>📄 ${t('config.title',lang)}</h1><div class="sub">Xem và chỉnh sửa config.toml trực tiếp</div></div></div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <h3>📝 config.toml</h3>
-        <button class="btn" style="background:var(--grad1);color:#fff;padding:6px 16px" onClick=${()=>window.showToast&&window.showToast('Config saved','success')}>💾 ${t('form.save',lang)}</button>
+        <button class="btn" style="background:var(--grad1);color:#fff;padding:6px 16px" onClick=${save}>💾 ${t('form.save',lang)}</button>
       </div>
       ${loading?html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>`:html`
         <textarea value=${content} onInput=${e=>setContent(e.target.value)}
