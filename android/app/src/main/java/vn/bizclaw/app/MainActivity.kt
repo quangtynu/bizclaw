@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import vn.bizclaw.app.ui.agents.AgentsScreen
 import vn.bizclaw.app.ui.chat.ChatScreen
@@ -38,6 +39,7 @@ enum class Screen {
 
 @Composable
 fun BizClawNavHost() {
+    val context = LocalContext.current
     val chatViewModel: ChatViewModel = viewModel()
     var currentScreen by remember { mutableStateOf(Screen.Chat) }
 
@@ -45,9 +47,10 @@ fun BizClawNavHost() {
     var serverUrl by remember { mutableStateOf("http://127.0.0.1:3001") }
     var apiKey by remember { mutableStateOf("") }
 
-    // Initialize — connect to LOCAL daemon (running on same phone)
+    // Initialize — connect to LOCAL daemon + check local models
     LaunchedEffect(Unit) {
         chatViewModel.updateServer(serverUrl, apiKey)
+        chatViewModel.refreshLocalModels(context)
     }
 
     when (currentScreen) {
@@ -92,7 +95,11 @@ fun BizClawNavHost() {
 
         Screen.LocalLLM -> {
             LocalLLMScreen(
-                onBack = { currentScreen = Screen.Chat },
+                onBack = {
+                    // Refresh local models when returning
+                    chatViewModel.refreshLocalModels(context)
+                    currentScreen = Screen.Chat
+                },
             )
         }
     }

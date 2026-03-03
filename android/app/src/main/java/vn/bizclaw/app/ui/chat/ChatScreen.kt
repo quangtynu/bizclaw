@@ -16,7 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,13 +35,17 @@ fun ChatScreen(
     val isLoading by viewModel.isLoading
     val currentAgent by viewModel.currentAgent
     val isConnected by viewModel.isConnected
+    val isLocalMode by viewModel.isLocalMode
+    val localModelName by viewModel.localModelName
+    val localGenSpeed by viewModel.localGenSpeed
+    val localContextUsed by viewModel.localContextUsed
     val error by viewModel.error
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     // Auto-scroll to bottom on new messages
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
@@ -54,18 +58,29 @@ fun ChatScreen(
                     Column {
                         Text("BizClaw", fontWeight = FontWeight.Bold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Status dot
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (isConnected) MaterialTheme.colorScheme.secondary
-                                        else MaterialTheme.colorScheme.error
+                                        when {
+                                            isLocalMode && viewModel.localLLM.isLoaded -> Color(0xFF00E676) // Green
+                                            isLocalMode -> Color(0xFFFF9800)   // Orange (local but no model)
+                                            isConnected -> MaterialTheme.colorScheme.secondary
+                                            else -> MaterialTheme.colorScheme.error
+                                        }
                                     )
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = if (isConnected) "🤖 $currentAgent" else "Disconnected",
+                                text = when {
+                                    isLocalMode && viewModel.localLLM.isLoaded ->
+                                        "🧠 $currentAgent — ${localModelName ?: "local"}"
+                                    isLocalMode -> "🧠 Local (no model)"
+                                    isConnected -> "🤖 $currentAgent"
+                                    else -> "Disconnected"
+                                },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -73,8 +88,23 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenLocalLLM) {
-                        Icon(Icons.Default.Memory, contentDescription = "Local LLM")
+                    // Toggle local/cloud mode
+                    IconButton(onClick = {
+                        if (isLocalMode) {
+                            viewModel.isLocalMode.value = false
+                            viewModel.currentAgent.value = "default"
+                        } else if (viewModel.localLLM.isLoaded) {
+                            viewModel.isLocalMode.value = true
+                            viewModel.currentAgent.value = "local"
+                        } else {
+                            onOpenLocalLLM()
+                        }
+                    }) {
+                        Icon(
+                            Icons.Default.Memory,
+                            contentDescription = "Local LLM",
+                            tint = if (isLocalMode) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     IconButton(onClick = onOpenDashboard) {
                         Icon(Icons.Default.Dashboard, contentDescription = "Dashboard")
@@ -97,18 +127,64 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Error banner
-            AnimatedVisibility(visible = error != null) {
+            // Local mode performance stats bar
+            AnimatedVisibility(visible = isLocalMode && localGenSpeed > 0) {
                 Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
+                    color = Color(0xFF1B5E20).copy(alpha = 0.15f),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
-                        text = error ?: "",
+                    Row(
+                        modifier = Modifier.padding(12.dp, 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("🧠", fontSize = 16.sp)
+                        Text(
+                            "⚡ %.1f tok/s".format(localGenSpeed),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF00E676),
+                        )
+                        Text(
+                            "📊 Context: $localContextUsed",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "💰 $0",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF00E676),
+                        )
+                    }
+                }
+            }
+
+            // Error/info banner
+            AnimatedVisibility(visible = error != null) {
+                Surface(
+                    color = if (error?.contains("auto-switch") == true)
+                        Color(0xFF1B5E20).copy(alpha = 0.2f)
+                    else
+                        MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
                         modifier = Modifier.padding(12.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = error ?: "",
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        IconButton(
+                            onClick = { viewModel.error.value = null },
+                            modifier = Modifier.size(20.dp),
+                        ) {
+                            Icon(Icons.Default.Close, "Dismiss", Modifier.size(14.dp))
+                        }
+                    }
                 }
             }
 
@@ -124,7 +200,7 @@ fun ChatScreen(
                 // Welcome message
                 if (messages.isEmpty()) {
                     item {
-                        WelcomeCard()
+                        WelcomeCard(isLocalMode = isLocalMode, localModelName = localModelName)
                     }
                 }
 
@@ -147,11 +223,17 @@ fun ChatScreen(
                         value = inputText,
                         onValueChange = { inputText = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Nhắn tin cho $currentAgent...") },
+                        placeholder = {
+                            Text(
+                                if (isLocalMode) "Hỏi BizClaw local..."
+                                else "Nhắn tin cho $currentAgent..."
+                            )
+                        },
                         shape = RoundedCornerShape(24.dp),
                         maxLines = 4,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedBorderColor = if (isLocalMode) Color(0xFF00E676)
+                            else MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                         ),
                     )
@@ -163,6 +245,10 @@ fun ChatScreen(
                         },
                         enabled = inputText.isNotBlank() && !isLoading,
                         modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = if (isLocalMode) Color(0xFF00E676)
+                            else MaterialTheme.colorScheme.primary,
+                        ),
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
@@ -194,13 +280,13 @@ fun ChatBubble(message: UiMessage) {
             // Agent avatar
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
+                color = if (message.isLocal) Color(0xFF1B5E20) else MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .size(32.dp)
                     .padding(top = 4.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text("🤖", fontSize = 16.sp)
+                    Text(if (message.isLocal) "🧠" else "🤖", fontSize = 16.sp)
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -225,7 +311,7 @@ fun ChatBubble(message: UiMessage) {
                     Text(
                         text = message.agentName,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (message.isLocal) Color(0xFF00E676) else MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.height(2.dp))
                 }
@@ -246,18 +332,36 @@ fun ChatBubble(message: UiMessage) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.dp),
-                        color = MaterialTheme.colorScheme.secondary,
+                        color = if (message.isLocal) Color(0xFF00E676) else MaterialTheme.colorScheme.secondary,
                     )
                 }
 
-                // Token count
-                if (message.tokensUsed > 0) {
+                // Stats row (tokens or tok/s)
+                if (message.tokensUsed > 0 || message.tokPerSec > 0) {
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "${message.tokensUsed} tokens",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (message.tokPerSec > 0) {
+                            Text(
+                                text = "⚡ %.1f tok/s".format(message.tokPerSec),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF00E676),
+                            )
+                        }
+                        if (message.tokensUsed > 0) {
+                            Text(
+                                text = "${message.tokensUsed} tokens",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            )
+                        }
+                        if (message.isLocal) {
+                            Text(
+                                text = "📱 local",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF00E676).copy(alpha = 0.7f),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -265,7 +369,7 @@ fun ChatBubble(message: UiMessage) {
 }
 
 @Composable
-fun WelcomeCard() {
+fun WelcomeCard(isLocalMode: Boolean = false, localModelName: String? = null) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -280,22 +384,29 @@ fun WelcomeCard() {
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("🤖", fontSize = 48.sp)
+            Text(if (isLocalMode) "🧠" else "🤖", fontSize = 48.sp)
             Spacer(Modifier.height(16.dp))
             Text(
-                "Chào mừng đến với BizClaw",
+                if (isLocalMode) "BizClaw Local AI"
+                else "Chào mừng đến với BizClaw",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "AI Agent Platform — Nhẹ, Nhanh, Tiết Kiệm",
+                if (isLocalMode)
+                    "On-Device • ${localModelName ?: "No model"} • $0 cost"
+                else
+                    "AI Agent Platform — Nhẹ, Nhanh, Tiết Kiệm",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Gửi tin nhắn để bắt đầu trò chuyện với agent.",
+                if (isLocalMode)
+                    "100% offline, no API keys. Your data stays on your phone."
+                else
+                    "Gửi tin nhắn để bắt đầu trò chuyện với agent.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
