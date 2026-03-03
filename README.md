@@ -78,7 +78,7 @@ cd bizclaw && cargo build --release
 
 | Hạng mục | Chi tiết |
 |----------|----------|
-| **🔌 15 Providers** | OpenAI, Anthropic, Gemini, DeepSeek, Groq, OpenRouter, Together, MiniMax, xAI (Grok), Mistral, Ollama, llama.cpp, Brain Engine, CLIProxy, vLLM + custom endpoint |
+| **🔌 16 Providers** | OpenAI, Anthropic, Gemini, DeepSeek, Groq, OpenRouter, Together, MiniMax, xAI (Grok), Mistral, **BytePlus ModelArk** 🔥, Ollama, llama.cpp, Brain Engine, CLIProxy, vLLM + custom endpoint |
 | **💬 9 Channels** | CLI, Telegram, Discord, Email (IMAP/SMTP), Webhook, WhatsApp, Zalo (Personal + Official) |
 | **🛠️ 13 Tools** | Shell, File, Edit File, Glob, Grep, Web Search, HTTP Request, Config Manager, Execute Code (9 ngôn ngữ), Plan Mode, Group Summarizer, Calendar, Document Reader, Memory Search, Session Context |
 | **🔗 MCP** | Model Context Protocol client — kết nối MCP servers bên ngoài, mở rộng tools không giới hạn |
@@ -118,7 +118,7 @@ Mọi trang trong dashboard tenant đều có đầy đủ thao tác **Thêm/S�
 | 🔗 **MCP** | Thêm/Xoá server, Quick Add |
 | 🤚 **Hands** | Tạo/Sửa/Xoá auto-agent |
 | 🔀 **Orchestration** | Tạo/Xoá delegation |
-| 📦 **Gallery** | Cài đặt template |
+| 📦 **Gallery** | Duyệt 51 template, xem chi tiết, **Clone thành Agent** |
 | 🔄 **Workflows** | Chạy/Xoá workflow |
 | 🧩 **Skills** | Install/Uninstall |
 | 🧠 **Brain** | Tạo/Sửa file |
@@ -152,15 +152,16 @@ Cài đặt agent chuyên biệt chỉ 1 click. Mỗi agent có **system prompt*
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Agent           │  Provider           │  Chi phí     │  Lý do  │
-├──────────────────┼─────────────────────┼──────────────┼─────────┤
-│  Dịch thuật      │  Ollama/qwen3       │  $0 (local)  │  Free   │
-│  Full-Stack Dev  │  Anthropic/claude   │  $$$         │  Mạnh   │
-│  Social Media    │  Gemini/flash       │  $           │  Nhanh  │
-│  Kế toán         │  DeepSeek/chat      │  $$          │  Giá tốt│
-│  Helpdesk        │  Groq/llama-3.3-70b │  $           │  Nhanh  │
-│  Nội bộ          │  Brain Engine       │  $0 (offline)│  Bảo mật│
-└─────────────────────────────────────────────────────────────────┘
+│  Agent           │  Provider             │  Chi phí     │  Lý do     │
+├──────────────────┼───────────────────────┼──────────────┼────────────┤
+│  Dịch thuật      │  Ollama/qwen3         │  $0 (local)  │  Free      │
+│  Full-Stack Dev  │  Anthropic/claude     │  $$$         │  Mạnh      │
+│  Social Media    │  Gemini/flash         │  $           │  Nhanh     │
+│  Kế toán         │  DeepSeek/chat        │  $$          │  Giá tốt   │
+│  Helpdesk        │  Groq/llama-3.3-70b   │  $           │  Nhanh     │
+│  Agentic Tasks   │  ModelArk/seed-2.0    │  $$          │  Agentic   │
+│  Nội bộ          │  Brain Engine         │  $0 (offline)│  Bảo mật   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 **Kết quả:** Tiết kiệm **60-80% chi phí API** so với dùng 1 provider cho tất cả agent.
@@ -204,7 +205,7 @@ Bạn: "Chuẩn bị pitch cho nhà đầu tư Series A"
 │  (Orchestrator manages N agents)                         │
 │    ┌──────────────┼──────────────┐                       │
 │    ▼              ▼              ▼                       │
-│ 15 Providers   9 Channels    13 Tools + MCP              │
+│ 16 Providers   9 Channels    13 Tools + MCP              │
 │    ▼              ▼              ▼                       │
 │ Memory         Security      Knowledge                   │
 │  (SQLite+FTS5) (Allowlist)   (RAG+FTS5)                  │
@@ -291,7 +292,7 @@ ollama pull qwen3         # ~4.7GB
 |-------|--------|--------|
 | `bizclaw-core` | Traits, types, config, errors | ✅ |
 | `bizclaw-brain` | GGUF inference + SIMD (ARM NEON, x86 AVX2) | ✅ |
-| `bizclaw-providers` | 15 LLM providers (OpenAI-compatible unified) | ✅ |
+| `bizclaw-providers` | 16 LLM providers (OpenAI-compatible unified) | ✅ |
 | `bizclaw-channels` | 9 channel types (CLI, Telegram, Discord, Email, Webhook, WhatsApp, Zalo) | ✅ |
 | `bizclaw-memory` | SQLite + FTS5, Brain workspace, daily auto-compaction | ✅ |
 | `bizclaw-tools` | 13 native tools + MCP bridge | ✅ |
@@ -346,7 +347,7 @@ ollama pull qwen3         # ~4.7GB
 | **Lines of Code** | ~41,000 (Rust 38K + Kotlin 3K) |
 | **Tests** | 240 passing |
 | **Clippy Warnings** | **0** ✅ |
-| **Providers** | 15 built-in + custom endpoint |
+| **Providers** | 16 built-in + custom endpoint |
 | **Channels** | 25+ types (33 registered) |
 | **Tools** | 13 native + MCP (unlimited) + 10 device tools |
 | **Scheduler** | Background tasks + retry |
@@ -366,7 +367,7 @@ BizClaw is a **self-hosted AI Agent platform** built entirely in Rust. Run AI ag
 
 ### Key Features
 
-- **🔌 15 Providers** — OpenAI, Anthropic, Gemini, DeepSeek, Groq, OpenRouter, Together, MiniMax, xAI, Mistral, Ollama, llama.cpp, Brain, CLIProxy, vLLM
+- **🔌 16 Providers** — OpenAI, Anthropic, Gemini, DeepSeek, Groq, OpenRouter, Together, MiniMax, xAI, Mistral, **BytePlus ModelArk**, Ollama, llama.cpp, Brain, CLIProxy, vLLM
 - **💬 9 Channels** — CLI, Telegram, Discord, Email, Webhook, WhatsApp, Zalo
 - **🛠️ 13 Tools** — Shell, File, Edit, Glob, Grep, Web Search, HTTP, Config, Execute Code (9 langs), Plan Mode, Group Summarizer, Calendar, Doc Reader, Memory Search, Session Context
 - **🔗 MCP Support** — Connect any MCP server for unlimited tool extensions
@@ -392,10 +393,15 @@ cd bizclaw && cargo build --release
 
 ### Deployment
 
-BizClaw is deployed at [bizclaw.vn](https://bizclaw.vn):
-- Admin Platform: `apps.bizclaw.vn`
-- Demo Tenant: `demo.bizclaw.vn`
-- Sales Tenant: `sales.bizclaw.vn`
+BizClaw is deployed on **2 independent domains** from the same codebase:
+
+| Domain | Landing Page | Platform Dashboard |
+|--------|-------------|--------------------|
+| **BizClaw** | [bizclaw.vn](https://bizclaw.vn) | [apps.bizclaw.vn](https://apps.bizclaw.vn) |
+| **ViAgent** | [viagent.vn](https://viagent.vn) | [apps.viagent.vn](https://apps.viagent.vn) |
+
+- Demo Tenant: `demo.bizclaw.vn` / `demo.viagent.vn`
+- Each domain runs independently with its own database, tenants, and pairing codes
 
 ### 🔗 Links
 
@@ -404,6 +410,8 @@ BizClaw is deployed at [bizclaw.vn](https://bizclaw.vn):
 | 🌐 **Website** | [https://bizclaw.vn](https://bizclaw.vn) |
 | 📘 **Fanpage** | [https://www.facebook.com/bizclaw.vn](https://www.facebook.com/bizclaw.vn) |
 | 💻 **GitHub** | [https://github.com/nguyenduchoai/bizclaw](https://github.com/nguyenduchoai/bizclaw) |
+
+| 🟢 **ViAgent** | [https://viagent.vn](https://viagent.vn) |
 
 ---
 
