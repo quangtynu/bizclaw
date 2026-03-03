@@ -237,45 +237,93 @@ cargo build --release
 ./target/release/bizclaw serve
 ```
 
-### 🏢 Chế độ triển khai
+### 🏢 3 Chế Độ Triển Khai
 
-| Mode | Binary | Use Case |
-|------|--------|----------|
-| **Standalone** | `bizclaw` only | 1 bot, cá nhân, test |
-| **Platform** | `bizclaw` + `bizclaw-platform` | Nhiều bots, agency, production |
+```
+  ┌─────────────────────────────────────────────────────────┐
+  │  Chế độ 1: STANDALONE                                   │
+  │  🍓 Pi / Laptop / Mini PC / $5 VPS                      │
+  │  → 1 bot duy nhất, cá nhân, KHÔNG cần PostgreSQL        │
+  │  → Ollama local cho LLM miễn phí                        │
+  ├─────────────────────────────────────────────────────────┤
+  │  Chế độ 2: PLATFORM (Multi-Tenant)                      │
+  │  🖥️ VPS 2GB+ RAM                                        │
+  │  → Quản lý N bots, N khách hàng trên 1 server           │
+  │  → PostgreSQL + Admin Dashboard + Subdomain routing      │
+  ├─────────────────────────────────────────────────────────┤
+  │  Chế độ 3: CLOUD MANAGEMENT                             │
+  │  ☁️ bizclaw.vn (Control Plane)                           │
+  │  → Quản lý NHIỀU VPS từ 1 dashboard                     │
+  │  → SSH provisioning, health check, remote commands       │
+  └─────────────────────────────────────────────────────────┘
+```
 
-**Platform mode** cung cấp:
-- Admin Dashboard tại `/admin/` — quản lý tenants, users, audit log
-- Mỗi tenant có subdomain riêng (demo.bizclaw.vn, sales.bizclaw.vn)
-- JWT authentication + per-tenant SQLite DB
+| Mode | Binary | Yêu cầu | Use Case |
+|------|--------|---------|----------|
+| 🍓 **Standalone** | `bizclaw` only | 512MB RAM, SQLite | 1 bot, cá nhân, Pi, laptop |
+| 🖥️ **Platform** | `bizclaw` + `bizclaw-platform` | 2GB+ RAM, PostgreSQL | Agency, production, multi-tenant |
+| ☁️ **Cloud** | Platform + Server Provisioner | VPS chạy bizclaw.vn | Quản lý nhiều VPS khách hàng |
 
-### 🏗️ Cài Đặt Tenant Độc Lập (VPS)
+---
 
-Cài BizClaw riêng trên VPS của bạn — không cần server trung gian.
+### 🍓 Chế độ 1: Standalone — 1 Bot trên thiết bị nhỏ
 
-**Yêu cầu tối thiểu:**
+> **Không cần PostgreSQL, không cần Nginx, không cần domain.**
+> Chạy trên Raspberry Pi, laptop, mini PC, hoặc VPS $5/tháng.
+
+```bash
+# 1. Clone & build (5-10 phút)
+git clone https://github.com/nguyenduchoai/bizclaw.git
+cd bizclaw && cargo build --release --bin bizclaw
+
+# 2. Cài đặt (wizard tương tác)
+./target/release/bizclaw init
+
+# 3. (Tuỳ chọn) Cài Ollama cho LLM miễn phí
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull qwen3:0.6b    # 500MB — chạy trên Pi 4
+
+# 4. Chạy bot
+./target/release/bizclaw serve
+# → Dashboard tại http://localhost:3579
+```
+
+**Standalone dùng:**
+- **SQLite** (embedded, không cần cài thêm)
+- **Ollama** cho LLM (miễn phí, chạy local)
+- Hoặc **API key** (OpenAI, Gemini, DeepSeek...) nếu muốn model mạnh hơn
+- 1 agent duy nhất, đủ cho cá nhân / quán cà phê / cửa hàng nhỏ
+
+---
+
+### 🖥️ Chế độ 2: Platform — Multi-Tenant trên VPS
+
+> **Quản lý nhiều bots, nhiều khách trên 1 server.**
+> Mỗi tenant có subdomain riêng, pairing code, dashboard riêng.
+
+**Yêu cầu:**
 - Ubuntu 22.04+ / Debian 12+
-- 1 vCPU, 1GB RAM (2GB+ recommended)
+- 2 vCPU, 2GB+ RAM (4GB recommended)
+- PostgreSQL 14+
 - Domain trỏ về IP server
 
 #### Quick Install (1 lệnh)
 
 ```bash
-# Cài tự động — chỉ cần domain và email
 curl -sSL https://bizclaw.vn/install.sh | sudo bash -s -- \
-  --domain bot.company.vn \
-  --admin-email admin@company.vn
+  --domain your-domain.vn \
+  --admin-email admin@your-domain.vn
 ```
 
 Script tự động:
 1. ✅ Cài PostgreSQL 16 + tạo database
 2. ✅ Tải BizClaw binary (hoặc build từ source)
-3. ✅ Tạo config.toml
+3. ✅ Tạo config.toml + Ollama
 4. ✅ Setup Nginx reverse proxy
 5. ✅ Cài SSL (Let's Encrypt)
 6. ✅ Tạo systemd service (auto-restart)
 
-#### Manual Install
+#### Manual Install (Step-by-step)
 
 ```bash
 # 1. Cài dependencies
@@ -290,45 +338,37 @@ sudo -u postgres psql -c "GRANT ALL ON DATABASE bizclaw TO bizclaw;"
 git clone https://github.com/nguyenduchoai/bizclaw.git
 cd bizclaw && cargo build --release
 
-# 4. Tạo config
-cat > config.toml << 'EOF'
-[server]
-host = "127.0.0.1"
-port = 3001
+# 4. Cài Ollama cho Brain Engine
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull qwen3:0.6b    # Model nhỏ cho bắt đầu
+ollama pull qwen3          # Model mạnh hơn (4.7GB)
 
-[database]
-url = "postgres://bizclaw:your_password@localhost/bizclaw"
+# 5. Chạy platform
+export DATABASE_URL="postgres://bizclaw:your_password@localhost/bizclaw"
+./target/release/bizclaw-platform --port 3001 \
+  --bizclaw-bin ./target/release/bizclaw
 
-[admin]
-username = "admin"
-# Password được hash tự động khi init
-EOF
-
-# 5. Initialize database
-./target/release/bizclaw-platform init
-
-# 6. Tạo systemd service
+# 6. (Tuỳ chọn) Tạo systemd service
 sudo tee /etc/systemd/system/bizclaw.service << 'EOF'
 [Unit]
 Description=BizClaw AI Agent Platform
 After=network.target postgresql.service
 
 [Service]
-ExecStart=/opt/bizclaw/bizclaw-platform --config /opt/bizclaw/config.toml
+ExecStart=/opt/bizclaw/bizclaw-platform --port 3001 --bizclaw-bin /opt/bizclaw/bizclaw
+Environment=DATABASE_URL=postgres://bizclaw:your_password@localhost/bizclaw
+Environment=RUST_LOG=info
 Restart=always
-User=bizclaw
-WorkingDirectory=/opt/bizclaw
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
 sudo systemctl enable --now bizclaw
 
 # 7. Nginx + SSL
 sudo tee /etc/nginx/sites-available/bizclaw << 'EOF'
 server {
-    server_name bot.company.vn;
+    server_name your-domain.vn *.your-domain.vn;
     location / {
         proxy_pass http://127.0.0.1:3001;
         proxy_set_header Host $host;
@@ -339,17 +379,23 @@ server {
     }
 }
 EOF
-
 sudo ln -sf /etc/nginx/sites-available/bizclaw /etc/nginx/sites-enabled/
-sudo certbot --nginx -d bot.company.vn
+sudo certbot --nginx -d your-domain.vn
 sudo systemctl reload nginx
 ```
 
-Sau khi cài xong, truy cập `https://bot.company.vn` để sử dụng.
+**Platform mode cung cấp:**
+- Admin Dashboard (`/admin/`) — quản lý tenants, users, agents, audit log
+- Mỗi tenant tự có subdomain (demo.your-domain.vn, sales.your-domain.vn)
+- JWT authentication + RBAC
+- Ollama/Brain Engine dùng chung giữa tất cả tenants
 
-### ☁️ Cloud Management (bizclaw.vn)
+---
 
-BizClaw hỗ trợ quản lý remote servers từ bizclaw.vn:
+### ☁️ Chế độ 3: Cloud Management (bizclaw.vn)
+
+> **Quản lý NHIỀU VPS khách hàng từ 1 dashboard duy nhất (bizclaw.vn).**
+> Khách hàng chỉ cần cung cấp **IP + root password** → BizClaw tự cài đặt và quản lý.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -370,7 +416,46 @@ BizClaw hỗ trợ quản lý remote servers từ bizclaw.vn:
 └─────────────────────────────────────────────────┘
 ```
 
-Khách hàng chỉ cần cung cấp **IP + root password** → BizClaw tự cài đặt và quản lý.
+**API Endpoints:**
+- `POST /api/admin/servers/provision` — Thêm server mới (IP + password)
+- `GET /api/admin/servers` — Danh sách servers
+- `POST /api/admin/servers/{id}/health` — Health check
+- `POST /api/admin/servers/{id}/exec` — Remote command
+- `DELETE /api/admin/servers/{id}` — Xoá server
+
+---
+
+### 🧠 Brain Engine / Ollama — Chạy AI Miễn Phí
+
+> **Ollama + Brain Engine = LLM hoàn toàn miễn phí, chạy offline.**
+> Models được dùng chung giữa tất cả tenants. Pull 1 lần → tất cả dùng được.
+
+```bash
+# Cài Ollama (1 lệnh)
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull models theo tài nguyên
+ollama pull qwen3:0.6b    # 500MB — Pi 4, VPS $5
+ollama pull qwen3          # 4.7GB — VPS 4GB RAM
+ollama pull llama3.2       # 3.8GB — phổ biến nhất
+ollama pull deepseek-r1    # 1.5B reasoning model
+```
+
+| Thiết bị | RAM | Model khuyên dùng |
+|----------|-----|-------------------|
+| 🍓 Raspberry Pi 4 | 2-4GB | `qwen3:0.6b`, `tinyllama` |
+| 💻 Laptop | 8GB+ | `qwen3`, `llama3.2` |
+| 🖥️ VPS | 4GB+ | `qwen3`, `llama3.2`, `deepseek-r1` |
+| 📱 Android | 4GB+ | GGUF via llama.cpp (xem phần Android) |
+
+**Trong Dashboard tenant:**
+- Vào **Brain Engine** page → thấy danh sách models đã pull
+- Chọn provider = `ollama` → model tự hiện
+- Hoặc chọn provider = `brain` → dùng GGUF trực tiếp (offline)
+
+> 💡 **Không cần API key.** Ollama chạy local, 100% miễn phí.
+
+---
 
 ### 🔗 MCP (Model Context Protocol) Support
 
@@ -396,16 +481,6 @@ name = "database"
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-postgres"]
 env = { DATABASE_URL = "postgresql://..." }
-```
-
-### 🧠 Ollama / Brain Engine — Chạy AI Offline
-
-Ollama models được **dùng chung** giữa tất cả tenants. Pull 1 lần → tất cả dùng được.
-
-```bash
-curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull llama3.2      # ~3.8GB
-ollama pull qwen3         # ~4.7GB
 ```
 
 ### 📦 Crate Map
