@@ -59,10 +59,10 @@ const PAGES = [
   { id: 'traces', icon: '📊', label: 'LLM Traces' },
   { id: 'cost', icon: '💰', label: 'Cost Tracking' },
   { id: 'activity', icon: '⚡', label: 'Activity Feed' },
+  { id: 'wiki', icon: '📖', label: 'Wiki & Guide' },
   { id: 'sep2', sep: true },
   { id: 'brain', icon: '🧠', label: 'nav.brain' },
   { id: 'configfile', icon: '📄', label: 'nav.config' },
-  { id: 'wiki', icon: '📖', label: 'Wiki & Guide' },
 ];
 
 // ═══ TOAST ═══
