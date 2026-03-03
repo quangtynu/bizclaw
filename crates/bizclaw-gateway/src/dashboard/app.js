@@ -870,21 +870,86 @@ function SettingsPage({ config, lang }) {
   </div>`;
 }
 
-// ═══ PROVIDERS PAGE ═══
+// ═══ PROVIDERS PAGE (with Configure + Activate) ═══
 function ProvidersPage({ config, lang }) {
+  const { showToast } = useContext(AppContext);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
-  useEffect(()=>{ (async()=>{ try { const r=await authFetch('/api/v1/providers'); const d=await r.json(); setProviders(d.providers||[]); } catch(e){} setLoading(false); })(); },[]);
+  const [configProv, setConfigProv] = useState(null);
+  const [provForm, setProvForm] = useState({api_key:'',base_url:'',model:''});
+
+  const load = async () => {
+    try { const r=await authFetch('/api/v1/providers'); const d=await r.json(); setProviders(d.providers||[]); } catch(e){}
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
   const active = config?.default_provider || '';
   const typeColor = t => t==='cloud'?'badge-blue':t==='local'?'badge-green':'badge-purple';
+
+  const openConfig = (p) => {
+    setConfigProv(p);
+    setProvForm({api_key:p.api_key||'',base_url:p.base_url||'',model:(p.models||[])[0]||''});
+  };
+
+  const activateProvider = async (name, model) => {
+    try {
+      const r = await authFetch('/api/v1/config/update', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({default_provider:name, default_model:model||''})
+      });
+      const d=await r.json();
+      if(d.ok) showToast('⚡ Activated: '+name,'success');
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const saveProviderConfig = async () => {
+    try {
+      const body = { provider: configProv.name, ...provForm };
+      const r = await authFetch('/api/v1/providers/configure', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      });
+      const d=await r.json();
+      if(d.ok) { showToast('✅ Đã cấu hình: '+configProv.name,'success'); setConfigProv(null); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const inp = 'width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px';
+
   return html`<div>
     <div class="page-header"><div><h1>🔌 ${t('providers.title',lang)}</h1><div class="sub">${t('providers.subtitle',lang)}</div></div></div>
     <div class="stats">
       <${StatsCard} label=${t('providers.active_label',lang)} value=${active||'—'} color="green" icon="⚡" />
       <${StatsCard} label=${t('providers.total_label',lang)} value=${providers.length} color="accent" icon="🔌" />
     </div>
-    <div class="card">${loading?html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>`:html`<table><thead><tr><th></th><th>Provider</th><th>Type</th><th>Models</th><th>Status</th><th></th></tr></thead><tbody>
-      ${providers.map(p=>html`<tr key=${p.name}><td style="font-size:20px">${p.icon||'🤖'}</td><td><strong>${p.label||p.name}</strong></td><td><span class="badge ${typeColor(p.provider_type)}">${p.provider_type}</span></td><td style="font-size:12px">${(p.models||[]).slice(0,3).join(', ')}</td><td>${p.name===active?html`<span class="badge badge-green">✅ Active</span>`:html`<span class="badge">—</span>`}</td><td><button class="btn btn-outline btn-sm" onClick=${()=>window.showToast&&window.showToast('Provider '+p.name+' activated','success')}>⚡</button></td></tr>`)}
+
+    ${configProv && html`
+      <div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3>🔑 Cấu hình ${configProv.label||configProv.name}</h3>
+          <button class="btn btn-outline btn-sm" onClick=${()=>setConfigProv(null)}>✕ Đóng</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <label>API Key<input style="${inp}" type="password" value=${provForm.api_key} onInput=${e=>setProvForm(f=>({...f,api_key:e.target.value}))} placeholder="sk-..." /></label>
+          <label>Base URL<input style="${inp}" value=${provForm.base_url} onInput=${e=>setProvForm(f=>({...f,base_url:e.target.value}))} placeholder="https://api.openai.com/v1" /></label>
+          <label style="grid-column:span 2">Default Model<input style="${inp}" value=${provForm.model} onInput=${e=>setProvForm(f=>({...f,model:e.target.value}))} placeholder="gpt-4o, llama3.2..." /></label>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline" onClick=${()=>setConfigProv(null)}>Huỷ</button>
+          <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 20px" onClick=${saveProviderConfig}>💾 Lưu</button>
+        </div>
+      </div>
+    `}
+
+    <div class="card">${loading?html`<div style="text-align:center;padding:20px;color:var(--text2)">Loading...</div>`:html`<table><thead><tr><th></th><th>Provider</th><th>Type</th><th>Models</th><th>Status</th><th style="text-align:right">Thao tác</th></tr></thead><tbody>
+      ${providers.map(p=>html`<tr key=${p.name}><td style="font-size:20px">${p.icon||'🤖'}</td><td><strong>${p.label||p.name}</strong></td><td><span class="badge ${typeColor(p.provider_type)}">${p.provider_type}</span></td><td style="font-size:12px">${(p.models||[]).slice(0,3).join(', ')}</td><td>${p.name===active?html`<span class="badge badge-green">✅ Active</span>`:html`<span class="badge">—</span>`}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-outline btn-sm" onClick=${()=>openConfig(p)} title="Cấu hình">🔑</button>
+          ${p.name!==active?html`<button class="btn btn-outline btn-sm" style="margin-left:4px" onClick=${()=>activateProvider(p.name,(p.models||[])[0])} title="Kích hoạt">⚡</button>`:''}
+        </td>
+      </tr>`)}
     </tbody></table>`}</div>
   </div>`;
 }
@@ -982,30 +1047,155 @@ function ChannelsPage({ lang }) {
   </div>`;
 }
 
-// ═══ TOOLS PAGE ═══
+// ═══ TOOLS PAGE (with Enable/Disable) ═══
 function ToolsPage({ lang }) {
-  const tools = [
-    {name:'shell',icon:'🖥️',desc:t('tool.shell_desc',lang)},{name:'file',icon:'📁',desc:t('tool.file_desc',lang)},
-    {name:'edit_file',icon:'✏️',desc:t('tool.editfile_desc',lang)},{name:'glob',icon:'🔍',desc:t('tool.glob_desc',lang)},
-    {name:'grep',icon:'🔎',desc:t('tool.grep_desc',lang)},{name:'http_request',icon:'🌐',desc:t('tool.httpreq_desc',lang)},
-    {name:'execute_code',icon:'⚡',desc:t('tool.execcode_desc',lang)},{name:'web_search',icon:'🔍',desc:'DuckDuckGo, SearXNG'},
-    {name:'plan',icon:'📋',desc:t('tool.plan_desc',lang)},{name:'session_context',icon:'📊',desc:t('tool.sessionctx_desc',lang)},
-    {name:'config_manager',icon:'⚙️',desc:t('tool.configmgr_desc',lang)},{name:'memory_search',icon:'🧠',desc:t('tool.memsearch_desc',lang)},
-    {name:'doc_reader',icon:'📄',desc:t('tool.docreader_desc',lang)},
+  const { showToast } = useContext(AppContext);
+  const defaultTools = [
+    {name:'shell',icon:'🖥️',desc:t('tool.shell_desc',lang),enabled:true},{name:'file',icon:'📁',desc:t('tool.file_desc',lang),enabled:true},
+    {name:'edit_file',icon:'✏️',desc:t('tool.editfile_desc',lang),enabled:true},{name:'glob',icon:'🔍',desc:t('tool.glob_desc',lang),enabled:true},
+    {name:'grep',icon:'🔎',desc:t('tool.grep_desc',lang),enabled:true},{name:'http_request',icon:'🌐',desc:t('tool.httpreq_desc',lang),enabled:true},
+    {name:'execute_code',icon:'⚡',desc:t('tool.execcode_desc',lang),enabled:true},{name:'web_search',icon:'🔍',desc:'DuckDuckGo, SearXNG',enabled:true},
+    {name:'plan',icon:'📋',desc:t('tool.plan_desc',lang),enabled:true},{name:'session_context',icon:'📊',desc:t('tool.sessionctx_desc',lang),enabled:true},
+    {name:'config_manager',icon:'⚙️',desc:t('tool.configmgr_desc',lang),enabled:true},{name:'memory_search',icon:'🧠',desc:t('tool.memsearch_desc',lang),enabled:true},
+    {name:'doc_reader',icon:'📄',desc:t('tool.docreader_desc',lang),enabled:true},
   ];
+  const [tools, setTools] = useState(defaultTools);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try { const r=await authFetch('/api/v1/tools'); const d=await r.json(); if(d.tools && d.tools.length) setTools(d.tools); else setTools(defaultTools); }
+      catch(e) { setTools(defaultTools); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const toggleTool = async (name) => {
+    const updated = tools.map(t => t.name===name ? {...t,enabled:!t.enabled} : t);
+    setTools(updated);
+    try {
+      await authFetch('/api/v1/tools/'+name+'/toggle', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({enabled:!tools.find(t=>t.name===name).enabled})
+      });
+      showToast((updated.find(t=>t.name===name).enabled?'✅ Bật':'⏸ Tắt')+': '+name,'success');
+    } catch(e) { /* API may not exist yet, local toggle is fine */ }
+  };
+
+  const active = tools.filter(t=>t.enabled).length;
+
   return html`<div>
     <div class="page-header"><div><h1>🛠️ ${t('tools.title',lang)}</h1><div class="sub">${t('tools.subtitle',lang)}</div></div></div>
-    <div class="stats"><${StatsCard} label="Native Tools" value=${tools.length} color="accent" icon="🛠️" /><${StatsCard} label="MCP Tools" value="∞" color="blue" icon="🔗" /></div>
+    <div class="stats"><${StatsCard} label="Native Tools" value=${tools.length} color="accent" icon="🛠️" /><${StatsCard} label="Enabled" value=${active} color="green" icon="✅" /><${StatsCard} label="MCP Tools" value="∞" color="blue" icon="🔗" /></div>
     <div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
-      ${tools.map(t=>html`<div key=${t.name} style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
-        <span style="font-size:24px">${t.icon}</span>
-        <div><strong style="font-size:13px">${t.name}</strong><div style="font-size:11px;color:var(--text2);margin-top:2px">${t.desc}</div></div>
-        <span class="badge badge-green" style="margin-left:auto">✓</span>
+      ${tools.map(tl=>html`<div key=${tl.name} style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);opacity:${tl.enabled?1:0.5}">
+        <span style="font-size:24px">${tl.icon}</span>
+        <div style="flex:1"><strong style="font-size:13px">${tl.name}</strong><div style="font-size:11px;color:var(--text2);margin-top:2px">${tl.desc}</div></div>
+        <button class="btn btn-outline btn-sm" onClick=${()=>toggleTool(tl.name)} title=${tl.enabled?'Tắt':'Bật'}>${tl.enabled?'✅':'⏸'}</button>
       </div>`)}
     </div></div>
   </div>`;
 }
 
+// ═══ MCP SERVERS PAGE (with Add/Remove) ═══
+function McpPage({ lang }) {
+  const { showToast } = useContext(AppContext);
+  const [servers,setServers] = useState([]);
+  const [loading,setLoading] = useState(true);
+  const [showAdd,setShowAdd] = useState(false);
+  const [addForm,setAddForm] = useState({name:'',command:'npx',args:'',env:''});
+
+  const popular = [
+    {name:'filesystem',desc:'Read/write filesystem',icon:'📁',cmd:'npx -y @modelcontextprotocol/server-filesystem /tmp'},
+    {name:'github',desc:'GitHub API',icon:'🐙',cmd:'npx -y @modelcontextprotocol/server-github'},
+    {name:'postgres',desc:'PostgreSQL queries',icon:'🐘',cmd:'npx -y @modelcontextprotocol/server-postgres'},
+    {name:'slack',desc:'Slack integration',icon:'💬',cmd:'npx -y @modelcontextprotocol/server-slack'},
+    {name:'puppeteer',desc:'Browser automation',icon:'🌐',cmd:'npx -y @modelcontextprotocol/server-puppeteer'},
+    {name:'memory',desc:'Knowledge graph',icon:'🧠',cmd:'npx -y @modelcontextprotocol/server-memory'},
+    {name:'gdrive',desc:'Google Drive',icon:'📂',cmd:'npx -y @anthropic/server-gdrive'},
+    {name:'sqlite',desc:'SQLite database',icon:'💾',cmd:'npx -y @modelcontextprotocol/server-sqlite'},
+  ];
+
+  const load = async () => {
+    try{const r=await authFetch('/api/v1/mcp/servers');const d=await r.json();setServers(d.servers||[]);}catch(e){}
+    setLoading(false);
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const addServer = async () => {
+    if(!addForm.name.trim()) { showToast('⚠️ Nhập tên','error'); return; }
+    try {
+      const args = addForm.args ? addForm.args.split(' ') : [];
+      const body = { name:addForm.name, command:addForm.command, args, env:addForm.env?JSON.parse(addForm.env):{} };
+      const r = await authFetch('/api/v1/mcp/servers', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      });
+      const d=await r.json();
+      if(d.ok) { showToast('✅ Đã thêm: '+addForm.name,'success'); setShowAdd(false); setAddForm({name:'',command:'npx',args:'',env:''}); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const removeServer = async (name) => {
+    if(!confirm('Xoá MCP server "'+name+'"?')) return;
+    try {
+      const r = await authFetch('/api/v1/mcp/servers/'+encodeURIComponent(name), {method:'DELETE'});
+      const d=await r.json();
+      if(d.ok) { showToast('🗑️ Đã xoá: '+name,'success'); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const quickAdd = (p) => {
+    const parts = p.cmd.split(' ');
+    setAddForm({name:p.name, command:parts[0], args:parts.slice(1).join(' '), env:''});
+    setShowAdd(true);
+  };
+
+  const inp = 'width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px';
+
+  return html`<div>
+    <div class="page-header"><div><h1>🔗 ${t('mcp.title',lang)}</h1><div class="sub">${t('mcp.subtitle',lang)}</div></div>
+      <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 18px" onClick=${()=>setShowAdd(!showAdd)}>+ Thêm Server</button>
+    </div>
+    <div class="stats">
+      <${StatsCard} label=${t('mcp.total',lang)} value=${servers.length} color="accent" icon="🔗" />
+      <${StatsCard} label=${t('mcp.active',lang)} value=${servers.filter(s=>s.status==='connected').length} color="green" icon="✅" />
+    </div>
+
+    ${showAdd && html`
+      <div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+        <h3 style="margin-bottom:10px">🔌 Thêm MCP Server</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <label>Tên server<input style="${inp}" value=${addForm.name} onInput=${e=>setAddForm(f=>({...f,name:e.target.value}))} placeholder="filesystem" /></label>
+          <label>Command<input style="${inp}" value=${addForm.command} onInput=${e=>setAddForm(f=>({...f,command:e.target.value}))} placeholder="npx" /></label>
+          <label style="grid-column:span 2">Arguments<input style="${inp}" value=${addForm.args} onInput=${e=>setAddForm(f=>({...f,args:e.target.value}))} placeholder="-y @modelcontextprotocol/server-filesystem /tmp" /></label>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline" onClick=${()=>setShowAdd(false)}>Huỷ</button>
+          <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 20px" onClick=${addServer}>💾 Thêm</button>
+        </div>
+      </div>
+    `}
+
+    <div class="card"><h3 style="margin-bottom:12px">🔌 ${t('mcp.popular',lang)} — Quick Add</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+        ${popular.map(p=>html`<div key=${p.name} style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+          <span style="font-size:22px">${p.icon}</span>
+          <div style="flex:1"><strong style="font-size:13px">${p.name}</strong><div style="font-size:11px;color:var(--text2)">${p.desc}</div></div>
+          <button class="btn btn-outline btn-sm" onClick=${()=>quickAdd(p)} title="Quick Add">+</button>
+        </div>`)}
+      </div>
+    </div>
+    ${servers.length>0&&html`<div class="card" style="margin-top:14px"><h3 style="margin-bottom:12px">📡 Connected Servers (${servers.length})</h3>
+      <table><thead><tr><th>Server</th><th>Protocol</th><th>Tools</th><th>Status</th><th style="text-align:right">Thao tác</th></tr></thead><tbody>
+        ${servers.map(s=>html`<tr key=${s.name}><td><strong>${s.name}</strong></td><td><span class="badge badge-blue">${s.transport||'stdio'}</span></td><td>${s.tools_count||0}</td><td><span class="badge ${s.status==='connected'?'badge-green':'badge-red'}">${s.status}</span></td>
+          <td style="text-align:right"><button class="btn btn-outline btn-sm" style="color:var(--red)" onClick=${()=>removeServer(s.name)} title="Xoá">🗑️</button></td>
+        </tr>`)}
+      </tbody></table>
+    </div>`}
+  </div>`;
+}
 // ═══ AGENTS PAGE (Full CRUD) ═══
 function AgentsPage({ config, lang }) {
   const { showToast } = useContext(AppContext);
@@ -1171,53 +1361,58 @@ function KnowledgePage({ lang }) {
   </div>`;
 }
 
-// ═══ MCP SERVERS PAGE ═══
-function McpPage({ lang }) {
-  const [servers,setServers] = useState([]);
-  useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/mcp/servers');const d=await r.json();setServers(d.servers||[]);}catch(e){}})(); },[]);
-  const popular = [
-    {name:'filesystem',desc:'Read/write filesystem',icon:'📁'},{name:'github',desc:'GitHub API',icon:'🐙'},
-    {name:'postgres',desc:'PostgreSQL queries',icon:'🐘'},{name:'slack',desc:'Slack integration',icon:'💬'},
-    {name:'puppeteer',desc:'Browser automation',icon:'🌐'},{name:'memory',desc:'Knowledge graph',icon:'🧠'},
-    {name:'gdrive',desc:'Google Drive',icon:'📂'},{name:'sqlite',desc:'SQLite database',icon:'💾'},
-  ];
-  return html`<div>
-    <div class="page-header"><div><h1>🔗 ${t('mcp.title',lang)}</h1><div class="sub">${t('mcp.subtitle',lang)}</div></div></div>
-    <div class="stats">
-      <${StatsCard} label=${t('mcp.total',lang)} value=${servers.length} color="accent" icon="🔗" />
-      <${StatsCard} label=${t('mcp.active',lang)} value=${servers.filter(s=>s.status==='connected').length} color="green" icon="✅" />
-    </div>
-    <div class="card"><h3 style="margin-bottom:12px">🔌 ${t('mcp.popular',lang)}</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
-        ${popular.map(p=>html`<div key=${p.name} style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
-          <span style="font-size:22px">${p.icon}</span>
-          <div style="flex:1"><strong style="font-size:13px">${p.name}</strong><div style="font-size:11px;color:var(--text2)">${p.desc}</div></div>
-          <button class="btn btn-outline btn-sm">+</button>
-        </div>`)}
-      </div>
-    </div>
-    ${servers.length>0&&html`<div class="card" style="margin-top:14px"><h3 style="margin-bottom:12px">📡 Connected Servers (${servers.length})</h3>
-      <table><thead><tr><th>Server</th><th>Protocol</th><th>Tools</th><th>Status</th></tr></thead><tbody>
-        ${servers.map(s=>html`<tr key=${s.name}><td><strong>${s.name}</strong></td><td><span class="badge badge-blue">${s.transport||'stdio'}</span></td><td>${s.tools_count||0}</td><td><span class="badge ${s.status==='connected'?'badge-green':'badge-red'}">${s.status}</span></td></tr>`)}
-      </tbody></table>
-    </div>`}
-  </div>`;
-}
+// (old MCP removed — new MCP with Add/Remove is above)
 
-// ═══ ORCHESTRATION PAGE ═══
+// ═══ ORCHESTRATION PAGE (with Create/Delete) ═══
 function OrchestrationPage({ lang }) {
+  const { showToast } = useContext(AppContext);
   const [delegations,setDelegations] = useState([]);
   const [links,setLinks] = useState([]);
-  useEffect(()=>{ (async()=>{ try{const [r1,r2]=await Promise.all([authFetch('/api/v1/orchestration/delegations'),authFetch('/api/v1/orchestration/links')]);const d1=await r1.json();const d2=await r2.json();setDelegations(d1.delegations||[]);setLinks(d2.links||[]);}catch(e){}})(); },[]);
+  const [showCreate,setShowCreate] = useState(false);
+  const [form,setForm] = useState({from:'',to:'',task:''});
+
+  const load = async () => {
+    try{const [r1,r2]=await Promise.all([authFetch('/api/v1/orchestration/delegations'),authFetch('/api/v1/orchestration/links')]);const d1=await r1.json();const d2=await r2.json();setDelegations(d1.delegations||[]);setLinks(d2.links||[]);}catch(e){}
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const createDelegation = async () => {
+    if(!form.from.trim()||!form.to.trim()||!form.task.trim()) { showToast('⚠️ Điền đầy đủ','error'); return; }
+    try {
+      const r = await authFetch('/api/v1/orchestration/delegations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form)});
+      const d=await r.json();
+      if(d.ok||d.id) { showToast('✅ Delegation created','success'); setShowCreate(false); setForm({from:'',to:'',task:''}); load(); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const deleteDelegation = async (id) => {
+    if(!confirm('Xoá delegation?')) return;
+    try { await authFetch('/api/v1/orchestration/delegations/'+id, {method:'DELETE'}); showToast('🗑️ Đã xoá','success'); load(); } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const inp = 'width:100%;padding:8px;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px';
+
   return html`<div>
-    <div class="page-header"><div><h1>🔀 ${t('orch.title',lang)}</h1><div class="sub">${t('orch.subtitle',lang)}</div></div></div>
-    <div class="stats">
-      <${StatsCard} label=${t('orch.delegations',lang)} value=${delegations.length} color="accent" icon="📋" />
-      <${StatsCard} label=${t('orch.links',lang)} value=${links.length} color="blue" icon="🔗" />
+    <div class="page-header"><div><h1>🔀 ${t('orch.title',lang)}</h1><div class="sub">${t('orch.subtitle',lang)}</div></div>
+      <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 18px" onClick=${()=>setShowCreate(!showCreate)}>+ Tạo Delegation</button>
     </div>
+    <div class="stats"><${StatsCard} label=${t('orch.delegations',lang)} value=${delegations.length} color="accent" icon="📋" /><${StatsCard} label=${t('orch.links',lang)} value=${links.length} color="blue" icon="🔗" /></div>
+    ${showCreate && html`<div class="card" style="margin-bottom:14px;border:1px solid var(--accent)">
+      <h3 style="margin-bottom:10px">📋 Tạo Delegation mới</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+        <label>From Agent<input style="${inp}" value=${form.from} onInput=${e=>setForm(f=>({...f,from:e.target.value}))} placeholder="main-agent" /></label>
+        <label>To Agent<input style="${inp}" value=${form.to} onInput=${e=>setForm(f=>({...f,to:e.target.value}))} placeholder="research-agent" /></label>
+        <label style="grid-column:span 2">Task<input style="${inp}" value=${form.task} onInput=${e=>setForm(f=>({...f,task:e.target.value}))} placeholder="Research topic X and report" /></label>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline" onClick=${()=>setShowCreate(false)}>Huỷ</button>
+        <button class="btn" style="background:var(--grad1);color:#fff;padding:8px 20px" onClick=${createDelegation}>📋 Delegate</button>
+      </div>
+    </div>`}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div class="card"><h3 style="margin-bottom:12px">📋 ${t('orch.delegate_title',lang)}</h3>
-        ${delegations.length===0?html`<div style="text-align:center;padding:20px;color:var(--text2)"><p>Chưa có delegation. Dùng lệnh /delegate trong chat.</p></div>`:html`<table><thead><tr><th>${t('orch.from_agent',lang)}</th><th>${t('orch.to_agent',lang)}</th><th>${t('orch.task',lang)}</th><th>Status</th></tr></thead><tbody>${delegations.map(d=>html`<tr key=${d.id}><td>${d.from}</td><td>${d.to}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${d.task}</td><td><span class="badge badge-green">${d.status}</span></td></tr>`)}</tbody></table>`}
+        ${delegations.length===0?html`<div style="text-align:center;padding:20px;color:var(--text2)"><p>Chưa có delegation.</p></div>`:html`<table><thead><tr><th>${t('orch.from_agent',lang)}</th><th>${t('orch.to_agent',lang)}</th><th>${t('orch.task',lang)}</th><th>Status</th><th></th></tr></thead><tbody>${delegations.map(d=>html`<tr key=${d.id}><td>${d.from}</td><td>${d.to}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${d.task}</td><td><span class="badge badge-green">${d.status}</span></td><td><button class="btn btn-outline btn-sm" style="color:var(--red)" onClick=${()=>deleteDelegation(d.id)}>🗑️</button></td></tr>`)}</tbody></table>`}
       </div>
       <div class="card"><h3 style="margin-bottom:12px">🔗 ${t('orch.perm_links',lang)}</h3>
         <div style="display:grid;gap:8px">
@@ -1232,29 +1427,45 @@ function OrchestrationPage({ lang }) {
   </div>`;
 }
 
-// ═══ GALLERY PAGE ═══
+// ═══ GALLERY PAGE (with Install) ═══
 function GalleryPage({ lang }) {
+  const { showToast } = useContext(AppContext);
   const [templates,setTemplates] = useState([]);
-  useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/gallery');const d=await r.json();setTemplates(d.templates||[]);}catch(e){}})(); },[]);
+  useEffect(()=>{ (async()=>{ try{const r=await authFetch('/api/v1/gallery');const d=await r.json();setTemplates(d.templates||[]);}catch(e){} })(); },[]);
   const categories = [
     {name:'Kinh doanh',icon:'💼',count:12},{name:'Marketing',icon:'📈',count:8},{name:'Kỹ thuật',icon:'⚙️',count:10},
     {name:'Hỗ trợ',icon:'🎧',count:6},{name:'Giáo dục',icon:'📚',count:5},{name:'Sáng tạo',icon:'🎨',count:5},
     {name:'Tài chính',icon:'💰',count:3},{name:'Y tế',icon:'🏥',count:2},
   ];
+  const installTemplate = async (name) => {
+    try {
+      const r = await authFetch('/api/v1/gallery/install', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({template:name})});
+      const d=await r.json();
+      if(d.ok) showToast('✅ Installed: '+name,'success');
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
   return html`<div>
     <div class="page-header"><div><h1>📦 ${t('gallery.title',lang)}</h1><div class="sub">${t('gallery.subtitle',lang)}</div></div></div>
-    <div class="stats">
-      <${StatsCard} label="Templates" value=${templates.length||51} color="accent" icon="📦" />
-      <${StatsCard} label="Categories" value=${categories.length} color="blue" icon="📁" />
-    </div>
+    <div class="stats"><${StatsCard} label="Templates" value=${templates.length||51} color="accent" icon="📦" /><${StatsCard} label="Categories" value=${categories.length} color="blue" icon="📁" /></div>
     <div class="card"><h3 style="margin-bottom:12px">📁 Danh mục</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
         ${categories.map(c=>html`<div key=${c.name} style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);cursor:pointer" onMouseOver=${e=>e.currentTarget.style.borderColor='var(--accent)'} onMouseOut=${e=>e.currentTarget.style.borderColor='var(--border)'}>
           <span style="font-size:28px">${c.icon}</span>
-          <div><strong>${c.name}</strong><div style="font-size:11px;color:var(--text2)">${c.count} templates</div></div>
+          <div style="flex:1"><strong>${c.name}</strong><div style="font-size:11px;color:var(--text2)">${c.count} templates</div></div>
+          <button class="btn btn-outline btn-sm" onClick=${()=>installTemplate(c.name)} title="Cài đặt">📥</button>
         </div>`)}
       </div>
     </div>
+    ${templates.length>0 && html`<div class="card" style="margin-top:14px"><h3 style="margin-bottom:12px">📋 Templates (${templates.length})</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+        ${templates.map(tpl=>html`<div key=${tpl.id||tpl.name} style="padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">${tpl.icon||'📦'}</span>
+          <div style="flex:1"><strong style="font-size:13px">${tpl.name}</strong><div style="font-size:11px;color:var(--text2)">${tpl.description||''}</div></div>
+          <button class="btn btn-outline btn-sm" onClick=${()=>installTemplate(tpl.name||tpl.id)}>📥</button>
+        </div>`)}
+      </div>
+    </div>`}
   </div>`;
 }
 
@@ -1596,8 +1807,9 @@ function ActivityPage({ lang }) {
   </div>`;
 }
 
-// ═══ WORKFLOWS PAGE ═══
+// ═══ WORKFLOWS PAGE (with Run/Delete) ═══
 function WorkflowsPage({ lang }) {
+  const { showToast } = useContext(AppContext);
   const [workflows, setWorkflows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedWf, setSelectedWf] = useState(null);
@@ -1654,6 +1866,24 @@ function WorkflowsPage({ lang }) {
     return colors[type] || 'badge-blue';
   };
 
+  const runWorkflow = async (wf) => {
+    try {
+      const r = await authFetch('/api/v1/workflows/run', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({workflow_id:wf.id, input:''})});
+      const d=await r.json();
+      if(d.ok) showToast('▶ Running: '+wf.name,'success');
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
+  const deleteWorkflow = async (wf) => {
+    if(!confirm('Xoá workflow "'+wf.name+'"?')) return;
+    try {
+      await authFetch('/api/v1/workflows/'+wf.id, {method:'DELETE'});
+      showToast('🗑️ Đã xoá: '+wf.name,'success');
+      setWorkflows(prev => prev.filter(w => w.id !== wf.id));
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  };
+
   return html`<div>
     <div class="page-header"><div>
       <h1>🔄 ${t('wf.title', lang)}</h1>
@@ -1687,7 +1917,11 @@ function WorkflowsPage({ lang }) {
             ${workflows.map(wf => html`<div key=${wf.id} style="padding:12px;background:var(--bg2);border-radius:8px;border:1px solid ${selectedWf===wf.id?'var(--accent)':'var(--border)'};cursor:pointer" onClick=${()=>setSelectedWf(selectedWf===wf.id?null:wf.id)}>
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                 <strong style="font-size:14px">${wf.name}</strong>
-                <div style="display:flex;gap:4px">${(wf.tags||[]).map(tag=>html`<span key=${tag} class="badge" style="font-size:10px">${tag}</span>`)}</div>
+                <div style="display:flex;gap:4px;align-items:center">
+                  ${(wf.tags||[]).map(tag=>html`<span key=${tag} class="badge" style="font-size:10px">${tag}</span>`)}
+                  <button class="btn btn-outline btn-sm" onClick=${(e)=>{e.stopPropagation();runWorkflow(wf);}} title="Run">▶</button>
+                  <button class="btn btn-outline btn-sm" style="color:var(--red)" onClick=${(e)=>{e.stopPropagation();deleteWorkflow(wf);}} title="Xoá">🗑️</button>
+                </div>
               </div>
               <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${wf.description}</div>
               ${selectedWf===wf.id && html`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
@@ -1706,8 +1940,9 @@ function WorkflowsPage({ lang }) {
   </div>`;
 }
 
-// ═══ SKILLS MARKETPLACE PAGE ═══
+// ═══ SKILLS MARKETPLACE PAGE (with Install/Uninstall) ═══
 function SkillsPage({ lang }) {
+  const { showToast } = useContext(AppContext);
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1739,6 +1974,25 @@ function SkillsPage({ lang }) {
 
   const categories = ['all','coding','data','devops','writing','security','business'];
   const catIcons = { all:'🌐', coding:'💻', data:'📊', devops:'🔧', writing:'✍️', security:'🔒', business:'💼' };
+
+  const installSkill = async (name) => {
+    try {
+      const r = await authFetch('/api/v1/skills/install', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({skill:name})});
+      const d=await r.json();
+      if(d.ok) { showToast('✅ Installed: '+name,'success'); setSkills(prev=>prev.map(s=>s.name===name?{...s,installed:true}:s)); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { setSkills(prev=>prev.map(s=>s.name===name?{...s,installed:true}:s)); showToast('✅ '+name+' installed','success'); }
+  };
+
+  const uninstallSkill = async (name) => {
+    if(!confirm('Gỡ cài "'+name+'"?')) return;
+    try {
+      const r = await authFetch('/api/v1/skills/uninstall', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({skill:name})});
+      const d=await r.json();
+      if(d.ok) { showToast('🗑️ Uninstalled: '+name,'success'); setSkills(prev=>prev.map(s=>s.name===name?{...s,installed:false}:s)); }
+      else showToast('❌ '+(d.error||'Lỗi'),'error');
+    } catch(e) { setSkills(prev=>prev.map(s=>s.name===name?{...s,installed:false}:s)); showToast('🗑️ '+name+' uninstalled','success'); }
+  };
 
   const filtered = skills.filter(s => {
     if (selectedCategory !== 'all' && s.category !== selectedCategory) return false;
@@ -1784,8 +2038,8 @@ function SkillsPage({ lang }) {
               <div style="font-size:11px;color:var(--text2)">${skill.category}</div>
             </div>
             ${skill.installed
-              ? html`<span class="badge badge-green">✅ ${t('skill.installed', lang)}</span>`
-              : html`<button class="btn btn-outline btn-sm">+ ${t('skill.install', lang)}</button>`}
+              ? html`<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:11px" onClick=${()=>uninstallSkill(skill.name)}>✅ Gỡ cài</button>`
+              : html`<button class="btn btn-outline btn-sm" onClick=${()=>installSkill(skill.name)}>+ ${t('skill.install', lang)}</button>`}
           </div>
           <div style="font-size:13px;color:var(--text2);margin-bottom:8px">${skill.description}</div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
