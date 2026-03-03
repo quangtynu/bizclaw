@@ -2362,15 +2362,15 @@ export function App() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  // Navigate: set page globally and force re-render from top
+  // Navigate: use location.pathname for reliable full page transitions.
+  // Preact's internal render queue is stuck (__d flag issue), so we use
+  // a soft reload instead. The Rust server serves index.html for all routes,
+  // and URL-based initial routing works perfectly.
   const navigate = useCallback((pageId) => {
-    window.__bizclaw_page = pageId;
     const path = '/' + (pageId === 'dashboard' ? '' : pageId);
     if (location.pathname !== path) {
-      history.pushState({ page: pageId }, '', path);
+      location.pathname = path;
     }
-    // Force full re-render bypassing Preact's stuck queue
-    if (window.__bizclaw_rerender) window.__bizclaw_rerender();
   }, []);
 
   // Global navigate — must be set AFTER navigate is created
