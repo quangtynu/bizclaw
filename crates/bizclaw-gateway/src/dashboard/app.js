@@ -2254,7 +2254,9 @@ function ChatWidget() {
 }
 
 export function App() {
+  console.log('[App] ===== RENDER START =====');
   const [currentPage, setPage] = useState('dashboard');
+  console.log('[App] currentPage =', currentPage);
   const [lang, setLang] = useState(localStorage.getItem('bizclaw_lang') || 'vi');
   const [wsStatus, setWsStatus] = useState('disconnected');
   const [config, setConfig] = useState({});
@@ -2357,7 +2359,10 @@ export function App() {
   }, []);
 
   const navigate = useCallback((pageId) => {
+    console.log('[navigate] called with pageId =', pageId, 'current =', currentPage);
+    console.log('[navigate] setPage =', setPage, 'typeof =', typeof setPage);
     setPage(pageId);
+    console.log('[navigate] setPage called, awaiting re-render...');
     const path = '/' + (pageId === 'dashboard' ? '' : pageId);
     if (location.pathname !== path) {
       history.pushState({ page: pageId }, '', path);
