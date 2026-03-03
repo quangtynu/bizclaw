@@ -88,7 +88,7 @@ cd bizclaw && cargo build --release
 | **⏰ Heartbeat/Cron** | **MỚI v0.3** — Agent tự thức dậy, scheduled tasks, proactive notifications, cron expressions |
 | **🔧 Skills System** | **MỚI v0.3** — Plug-and-play skills, 10 built-in, hot-reload, per-tenant, multi-language (Python/JS/Shell) |
 | **👥 Agent Teams** | **MỚI v0.3** — Multi-agent collaboration, 5 team templates, workflow tracking, pipeline execution |
-| **🌐 Web Dashboard** | 15 trang UI (VI/EN), WebSocket real-time, chat, agents, providers, gallery, channels, brain, knowledge, scheduler, **LLM Traces, Cost Tracking, Activity Feed**, settings |
+| **🌐 Web Dashboard** | 20+ trang UI (VI/EN), WebSocket real-time, **Full CRUD trên tất cả pages**, LLM Traces, Cost Tracking, Activity Feed, **📖 Wiki & Guide tích hợp**, **🤖 AI Chat hướng dẫn sử dụng** |
 | **📱 Android Agent** | App chạy agent 24/7, Foreground Service, Accessibility Service điều khiển Facebook/Messenger/Zalo, device tools (battery/GPS/notification) |
 | **🤖 51 Agent Templates** | 13 danh mục nghiệp vụ, system prompt chuyên sâu, cài 1 click |
 | **👥 Group Chat** | Tạo nhóm agent cộng tác — gửi 1 câu hỏi, tất cả agent trong nhóm phản hồi |
@@ -102,6 +102,28 @@ cd bizclaw && cargo build --release
 | **📊 Prompt Caching** | Anthropic `cache_control` — tiết kiệm 60-90% token lặp |
 | **🔌 OpenAI-Compatible API** | Drop-in `/v1/chat/completions` — dùng với Cursor, Aider, Continue... |
 | **🔒 Security** | Command allowlist, AES-256, HMAC-SHA256, JWT + bcrypt, CORS, rate limiting |
+
+### 🌐 Dashboard — Full CRUD trên mọi trang
+
+Mọi trang trong dashboard tenant đều có đầy đủ thao tác **Thêm/Sửa/Xoá**, không chỉ xem:
+
+| Trang | Thao tác |
+|-------|----------|
+| 🤖 **AI Agents** | Tạo, Sửa, Xoá agent |
+| 📚 **Knowledge** | Thêm, Xoá tài liệu |
+| 📱 **Channels** | Cấu hình kênh liên lạc |
+| ⚙️ **Settings** | Lưu cấu hình, System Prompt |
+| 🔌 **Providers** | API Key, Activate provider |
+| 🛠️ **Tools** | Bật/Tắt từng tool |
+| 🔗 **MCP** | Thêm/Xoá server, Quick Add |
+| 🤚 **Hands** | Tạo/Sửa/Xoá auto-agent |
+| 🔀 **Orchestration** | Tạo/Xoá delegation |
+| 📦 **Gallery** | Cài đặt template |
+| 🔄 **Workflows** | Chạy/Xoá workflow |
+| 🧩 **Skills** | Install/Uninstall |
+| 🧠 **Brain** | Tạo/Sửa file |
+| 📖 **Wiki & Guide** | 6 bài hướng dẫn tích hợp |
+| 🤖 **AI Chat** | Chatbot hướng dẫn sử dụng (floating button 💬) |
 
 ### 🤖 Agent Gallery — 51 Mẫu Nghiệp vụ
 
@@ -329,10 +351,10 @@ ollama pull qwen3         # ~4.7GB
 | **Tools** | 13 native + MCP (unlimited) + 10 device tools |
 | **Scheduler** | Background tasks + retry |
 | **Gallery** | 51 business agent templates |
-| **Dashboard** | 15 pages, bilingual (VI/EN) |
+| **Dashboard** | 20+ pages, bilingual (VI/EN), Full CRUD, Wiki & AI Guide |
 | **Android** | 16 Kotlin files, Material 3, Compose |
 | **Binary Size** | bizclaw 12M, platform 7.7M, APK ~8MB |
-| **Last Updated** | 2026-02-28 |
+| **Last Updated** | 2026-03-03 |
 
 ---
 
