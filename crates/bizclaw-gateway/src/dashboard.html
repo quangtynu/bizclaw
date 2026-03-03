@@ -181,6 +181,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div class="nav-sep"></div>
       <a href="/brain" onclick="navigateTo(event,'brain')" id="nav-brain">🧠 <span data-i18n="nav.brain">Brain Engine</span></a>
       <a href="/configfile" onclick="navigateTo(event,'configfile')" id="nav-configfile">📄 <span data-i18n="nav.config">Tệp cấu hình</span></a>
+      <a href="/wiki" onclick="navigateTo(event,'wiki')" id="nav-wiki">📖 <span>Wiki & Guide</span></a>
     </nav>
     <div class="sidebar-footer">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
@@ -932,7 +933,42 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div class="page-header"><div><h1>📄 config.toml</h1><div class="sub" id="config-path">—</div></div></div>
       <div class="card"><pre id="config-toml-content" style="font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--accent2);white-space:pre-wrap;max-height:70vh;overflow-y:auto;padding:4px">Loading...</pre></div>
     </div>
+
+    <!-- ═══ WIKI & GUIDE ═══ -->
+    <div id="page-wiki" style="display:none">
+      <div class="page-header"><div><h1>📖 Wiki & Hướng dẫn</h1><div class="sub">Tài liệu hướng dẫn sử dụng hệ thống AI Agent</div></div>
+        <button class="btn btn-outline btn-sm" onclick="toggleTenantWikiSearch()">🔍 Tìm kiếm</button>
+      </div>
+      <div id="tenant-wiki-search-bar" style="display:none;margin-bottom:16px">
+        <input type="text" id="tenant-wiki-search-input" placeholder="Tìm kiếm..." oninput="searchTenantWiki(this.value)" style="width:100%;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+      </div>
+      <div style="display:grid;grid-template-columns:200px 1fr;gap:16px">
+        <div class="card" style="position:sticky;top:20px;align-self:start">
+          <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:10px">📑 Mục lục</div>
+          <div id="tenant-wiki-toc" style="font-size:12px;line-height:2"></div>
+        </div>
+        <div id="tenant-wiki-content" class="card" style="min-height:400px;font-size:13px;line-height:1.8"></div>
+      </div>
+    </div>
   </main>
+</div>
+
+<!-- AI Chat Guide Widget for Tenant -->
+<div id="tenant-chat-widget" style="position:fixed;bottom:20px;right:20px;z-index:9999">
+  <div id="tenant-chat-window" style="display:none;width:360px;height:480px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);flex-direction:column;overflow:hidden;margin-bottom:10px">
+    <div style="padding:12px 16px;background:var(--grad1);color:#fff;display:flex;justify-content:space-between;align-items:center;border-radius:14px 14px 0 0">
+      <div><strong>🤖 Trợ lý</strong><div style="font-size:10px;opacity:0.8">Hỏi cách sử dụng hệ thống</div></div>
+      <button onclick="toggleTenantChat()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer">✕</button>
+    </div>
+    <div id="tenant-chat-msgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:var(--bg2);padding:10px 12px;border-radius:10px 10px 10px 4px;font-size:12px;line-height:1.6;max-width:90%">👋 Chào bạn! Hỏi tôi về cách sử dụng:<br>• Chat với AI Agent<br>• Cấu hình kênh liên lạc<br>• Quản lý kho tri thức<br>• Lên lịch tự động</div>
+    </div>
+    <div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px">
+      <input id="tenant-chat-input" placeholder="Hỏi gì đó..." onkeydown="if(event.key==='Enter')sendTenantChatMsg()" style="flex:1;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+      <button onclick="sendTenantChatMsg()" class="btn btn-primary btn-sm">📤</button>
+    </div>
+  </div>
+  <button onclick="toggleTenantChat()" style="width:48px;height:48px;border-radius:50%;background:var(--grad1);border:none;color:#fff;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(99,102,241,0.4);transition:transform 0.2s" onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">💬</button>
 </div>
 
 <script>
@@ -1016,6 +1052,7 @@ function showPage(name, pushState) {
   if (name === 'brain') loadBrainFiles();
   if (name === 'scheduler') loadSchedulerPage();
   if (name === 'orchestration') loadOrchestrationPage();
+  if (name === 'wiki') loadTenantWiki('getting-started');
   if (name === 'groups') { navigateTo(null, 'chat'); return; } // redirect groups to chat
 }
 
@@ -1029,7 +1066,7 @@ window.addEventListener('popstate', (ev) => {
 function getPageFromPath() {
   const path = location.pathname.replace(/^\//, '').replace(/\/$/, '');
   // Map valid page names
-  const validPages = ['dashboard','chat','settings','providers','channels','tools','brain','configfile','mcp','agents','orchestration','gallery','knowledge','scheduler'];
+  const validPages = ['dashboard','chat','settings','providers','channels','tools','brain','configfile','mcp','agents','orchestration','gallery','knowledge','scheduler','wiki'];
   if (path === 'groups') return 'chat'; // redirect groups page to chat
   if (!path || path === '' || !validPages.includes(path)) return 'dashboard';
   return path;
@@ -4244,6 +4281,76 @@ async function initApp(){
   connectWS();
   setInterval(loadDashboard, 15000);
 }
+// ── Tenant Wiki & Guide ──────────────────────────────
+const TENANT_WIKI = [
+  {id:'getting-started',icon:'🚀',title:'Bắt đầu',content:`<h2>🚀 Bắt đầu sử dụng</h2><p>Dashboard này giúp bạn quản lý AI Agent. Các tính năng chính:</p><ul><li><strong>Chat:</strong> Trò chuyện trực tiếp với AI Agent</li><li><strong>Agents:</strong> Tạo và quản lý nhiều agent với vai trò khác nhau</li><li><strong>Channels:</strong> Kết nối Telegram, Zalo, Discord, Email</li><li><strong>Knowledge:</strong> Thêm tài liệu để AI trả lời chính xác hơn</li><li><strong>Scheduler:</strong> Lên lịch agent tự động chạy prompt</li><li><strong>Gallery:</strong> 50+ mẫu agent template</li></ul><h3>Bước đầu tiên</h3><ol><li>Vào <strong>Settings</strong> để kiểm tra provider & model</li><li>Vào <strong>Chat</strong> để thử nói chuyện với agent</li><li>Vào <strong>Channels</strong> để kết nối Telegram/Zalo</li></ol>`},
+  {id:'chat-guide',icon:'💬',title:'Chat với Agent',content:`<h2>💬 Chat với Agent</h2><p>Trang Chat cho phép bạn trò chuyện trực tiếp với AI Agent qua web.</p><h3>Cách sử dụng</h3><ol><li>Click <strong>Chat</strong> trên sidebar</li><li>Chọn agent trong sidebar chat (nếu có nhiều agent)</li><li>Nhập tin nhắn và nhấn Enter</li><li>Agent sẽ phản hồi tự động</li></ol><h3>Tính năng</h3><ul><li><strong>Multi-agent:</strong> Chọn agent khác nhau trong sidebar</li><li><strong>History:</strong> Lịch sử chat được lưu tự động</li><li><strong>Markdown:</strong> Agent trả lời với code blocks, lists, tables</li><li><strong>Real-time:</strong> Streaming response word-by-word</li></ul>`},
+  {id:'channels-guide',icon:'📱',title:'Kênh liên lạc',content:`<h2>📱 Cấu hình kênh liên lạc</h2><p>Kết nối agent với các ứng dụng messaging.</p><h3>Telegram</h3><ol><li>Mở <strong>@BotFather</strong> trên Telegram</li><li>Gõ <code>/newbot</code> → Đặt tên → Copy Token</li><li>Vào trang <strong>Channels</strong> → Bật <strong>Telegram</strong></li><li>Paste Bot Token → Click <strong>💾 Lưu</strong></li></ol><h3>Zalo OA</h3><ol><li>Tạo OA tại <strong>oa.zalo.me</strong></li><li>Lấy App ID, Secret Key, Access Token</li><li>Điền vào form Zalo → Click <strong>💾 Lưu</strong></li></ol><h3>Kênh khác</h3><ul><li><strong>Discord:</strong> Bot Token từ Developer Portal</li><li><strong>Email:</strong> IMAP/SMTP settings</li><li><strong>Webhook:</strong> Custom HTTP endpoint</li></ul>`},
+  {id:'knowledge-guide',icon:'📚',title:'Kho tri thức',content:`<h2>📚 Kho tri thức (RAG)</h2><p>Thêm tài liệu để AI trả lời dựa trên dữ liệu của bạn.</p><h3>Thêm tài liệu</h3><ol><li>Vào <strong>Kho tri thức</strong> → Click <strong>"+ Thêm tài liệu"</strong></li><li>Upload file (.txt, .md, .csv, .json) hoặc paste nội dung</li><li>Click <strong>Lưu</strong> — hệ thống tự động chia chunks</li></ol><h3>Tìm kiếm</h3><p>Dùng ô <strong>Tìm kiếm tri thức</strong> để test xem AI tìm thấy thông tin gì.</p><h3>Best Practices</h3><ul><li>Upload FAQ, product catalog, SOP</li><li>Chia tài liệu dài thành nhiều file nhỏ</li><li>Dùng tiêu đề rõ ràng trong tài liệu</li></ul>`},
+  {id:'scheduler-guide',icon:'⏰',title:'Lịch trình tự động',content:`<h2>⏰ Lịch trình tự động</h2><p>Lên lịch để Agent tự động chạy prompt và gửi kết quả.</p><h3>Tạo tác vụ</h3><ol><li>Vào <strong>Lịch trình</strong> → Click <strong>"+ Thêm tác vụ"</strong></li><li>Chọn Agent thực thi</li><li>Nhập Prompt (nội dung giao cho agent)</li><li>Nhập Cron expression (lịch chạy)</li><li>Chọn kênh nhận kết quả</li></ol><h3>Cron cheat sheet</h3><table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:12px"><tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>0 9 * * *</code></td><td>9:00 mỗi ngày</td></tr><tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>*/30 * * * *</code></td><td>Mỗi 30 phút</td></tr><tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>0 8 * * 1</code></td><td>8:00 Thứ 2</td></tr><tr><td style="padding:6px"><code>0 0 1 * *</code></td><td>Ngày 1 mỗi tháng</td></tr></table>`},
+  {id:'agents-guide',icon:'🤖',title:'Multi-Agent',content:`<h2>🤖 Quản lý nhiều Agent</h2><p>Tạo nhiều agent với vai trò và model khác nhau.</p><h3>Tạo Agent mới</h3><ol><li>Vào <strong>AI Agent</strong> → Click <strong>"+ Tạo Agent"</strong></li><li>Đặt tên, vai trò, mô tả</li><li>Chọn provider/model riêng (hoặc dùng mặc định)</li><li>Viết System Prompt</li><li>Click <strong>Tạo</strong></li></ol><h3>Gán Agent với kênh</h3><p>Click <strong>✏️ Sửa</strong> → phần "Gán Agent với Kênh" → chọn kênh muốn agent xử lý.</p><h3>Gallery Skills</h3><p>Vào <strong>Gallery</strong> để duyệt 50+ mẫu agent template theo ngành. Click <strong>Cài đặt</strong> để tạo nhanh.</p>`}
+];
+
+function loadTenantWiki(articleId) {
+  const toc = document.getElementById('tenant-wiki-toc');
+  const content = document.getElementById('tenant-wiki-content');
+  if(!toc||!content) return;
+  toc.innerHTML = TENANT_WIKI.map(a =>
+    `<a href="#" onclick="loadTenantWiki('${a.id}');return false" style="display:block;padding:3px 6px;border-radius:4px;text-decoration:none;color:${articleId===a.id?'var(--accent)':'var(--text)'};background:${articleId===a.id?'var(--bg2)':'transparent'};font-weight:${articleId===a.id?'600':'400'}">${a.icon} ${a.title}</a>`
+  ).join('');
+  const article = TENANT_WIKI.find(a => a.id === articleId) || TENANT_WIKI[0];
+  content.innerHTML = article.content;
+}
+function toggleTenantWikiSearch() {
+  const bar = document.getElementById('tenant-wiki-search-bar');
+  bar.style.display = bar.style.display === 'none' ? '' : 'none';
+  if(bar.style.display !== 'none') document.getElementById('tenant-wiki-search-input').focus();
+}
+function searchTenantWiki(q) {
+  const content = document.getElementById('tenant-wiki-content');
+  if(!q.trim()) { loadTenantWiki('getting-started'); return; }
+  const results = TENANT_WIKI.filter(a => a.title.toLowerCase().includes(q.toLowerCase()) || a.content.toLowerCase().includes(q.toLowerCase()));
+  if(!results.length) { content.innerHTML = '<p style="color:var(--text2);text-align:center;padding:30px">Không tìm thấy</p>'; return; }
+  content.innerHTML = '<h2>🔍 '+results.length+' kết quả</h2>' + results.map(a => `<div class="card" style="margin:8px 0;cursor:pointer" onclick="loadTenantWiki('${a.id}')"><strong>${a.icon} ${a.title}</strong></div>`).join('');
+}
+
+// ── Tenant AI Chat Widget ──────────────────────────────
+function toggleTenantChat() {
+  const win = document.getElementById('tenant-chat-window');
+  win.style.display = win.style.display === 'none' ? 'flex' : 'none';
+}
+function sendTenantChatMsg() {
+  const input = document.getElementById('tenant-chat-input');
+  const q = input.value.trim();
+  if(!q) return;
+  const msgs = document.getElementById('tenant-chat-msgs');
+  const userDiv = document.createElement('div');
+  userDiv.style.cssText = 'background:var(--accent);color:#fff;padding:8px 12px;border-radius:10px 10px 4px 10px;font-size:12px;max-width:85%;align-self:flex-end';
+  userDiv.textContent = q;
+  msgs.appendChild(userDiv);
+  input.value = '';
+  const lq = q.toLowerCase();
+  let best = null, bestScore = 0;
+  TENANT_WIKI.forEach(a => {
+    let score = 0;
+    const hay = (a.title+' '+a.content).toLowerCase();
+    lq.split(/\s+/).forEach(k => { if(hay.includes(k)) score++; });
+    if(score > bestScore) { bestScore = score; best = a; }
+  });
+  setTimeout(() => {
+    const botDiv = document.createElement('div');
+    botDiv.style.cssText = 'background:var(--bg2);padding:10px 12px;border-radius:10px 10px 10px 4px;font-size:12px;line-height:1.6;max-width:90%';
+    if(best && bestScore >= 1) {
+      const snippet = best.content.replace(/<[^>]+>/g,'').slice(0,250);
+      botDiv.innerHTML = `📖 <strong>${best.icon} ${best.title}</strong><br><br>${snippet}...<br><br><a href="#" onclick="navigateTo(null,'wiki');loadTenantWiki('${best.id}');return false" style="color:var(--accent)">📖 Xem Wiki →</a>`;
+    } else {
+      botDiv.innerHTML = '🤔 Thử hỏi: <strong>chat</strong>, <strong>telegram</strong>, <strong>agent</strong>, <strong>lịch trình</strong>, hoặc xem <a href="#" onclick="navigateTo(null,\'wiki\');return false" style="color:var(--accent)">📖 Wiki</a>.';
+    }
+    msgs.appendChild(botDiv);
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 300);
+}
+
 checkPairing();
 </script>
 </body>
