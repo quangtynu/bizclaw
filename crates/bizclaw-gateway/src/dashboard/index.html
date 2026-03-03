@@ -50,16 +50,16 @@ const { App } = await import('/static/dashboard/app.js');
 const appRoot = document.getElementById('app');
 
 // Initial render
-render(html`<${App} />`, appRoot);
+let renderKey = 0;
+render(html`<${App} key=${renderKey} />`, appRoot);
 
-// CRITICAL: Register a top-level re-render function.
-// Preact's internal render queue (enqueueRender/V) has a bug where the
-// component's __d (dirty) flag gets stuck at 'true' after initial
-// effects run, silently preventing all subsequent useState re-renders.
-// This function bypasses that by calling render() directly from the
-// module scope, which forces Preact to diff the entire tree.
+// CRITICAL: Force full remount by changing the key.
+// Preact's __d flag gets stuck, preventing diffing/re-rendering.
+// A new key forces Preact to unmount the old stuck instance
+// and mount a fresh one that reads window.__bizclaw_page.
 window.__bizclaw_rerender = () => {
-  render(html`<${App} />`, appRoot);
+  renderKey++;
+  render(html`<${App} key=${renderKey} />`, appRoot);
 };
 </script>
 </body>
