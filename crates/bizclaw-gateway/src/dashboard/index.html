@@ -8,20 +8,23 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/dashboard/styles.css">
 <!--
-  IMPORTANT: We import preact core and hooks from a SINGLE bundled URL.
-  Using separate esm.sh URLs for preact and preact/hooks creates the
-  "dual-package hazard" where hooks register with a different Preact
-  options singleton than the renderer, causing useState/setPage to
-  silently fail to trigger re-renders.
-
-  Solution: Use esm.sh ?bundle mode to inline all dependencies.
+  SELF-HOSTED VENDOR FILES: preact.mjs, hooks.mjs, htm.mjs
+  
+  These are self-hosted to eliminate the esm.sh CDN dual-package hazard.
+  The hooks module imports preact via relative path: import{options}from"./preact.mjs"
+  When self-hosted in the same directory, this relative import resolves to
+  the EXACT same preact.mjs file, guaranteeing a single Preact instance.
+  
+  Previously, using separate esm.sh URLs caused the browser to load two
+  different copies of Preact's options singleton, which silently broke
+  hooks (useState, useEffect) — state updates never triggered re-renders.
 -->
 <script type="importmap">
 {
   "imports": {
-    "preact": "https://esm.sh/preact@10.25.4/es2022/preact.mjs",
-    "preact/hooks": "https://esm.sh/preact@10.25.4/es2022/hooks.mjs",
-    "htm": "https://esm.sh/htm@3.1.1?bundle"
+    "preact": "/static/dashboard/vendor/preact.mjs",
+    "preact/hooks": "/static/dashboard/vendor/hooks.mjs",
+    "htm": "/static/dashboard/vendor/htm.mjs"
   }
 }
 </script>
@@ -29,10 +32,7 @@
 <body>
 <div id="app"></div>
 <script type="module">
-// Preact + HTM — React-like components, no build step (3KB + 700B)
-// Import from the EXACT same module URLs as the importmap to guarantee
-// a single Preact instance. The hooks module's internal
-// `import { options } from "./preact.mjs"` resolves to the same file.
+// Preact + HTM — self-hosted vendor files (no CDN, no dual-package hazard)
 import { h, render, Component, createContext } from 'preact';
 import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';

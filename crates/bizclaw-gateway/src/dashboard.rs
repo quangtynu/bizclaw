@@ -55,5 +55,28 @@ pub fn dashboard_static_files() -> HashMap<&'static str, (&'static str, &'static
         ),
     );
 
+    // Vendor: Self-hosted Preact + Hooks (avoids esm.sh dual-package hazard)
+    files.insert(
+        "/static/dashboard/vendor/preact.mjs",
+        (
+            include_str!("dashboard/vendor/preact.mjs"),
+            "application/javascript; charset=utf-8",
+        ),
+    );
+    files.insert(
+        "/static/dashboard/vendor/hooks.mjs",
+        (
+            include_str!("dashboard/vendor/hooks.mjs"),
+            "application/javascript; charset=utf-8",
+        ),
+    );
+    files.insert(
+        "/static/dashboard/vendor/htm.mjs",
+        (
+            include_str!("dashboard/vendor/htm.mjs"),
+            "application/javascript; charset=utf-8",
+        ),
+    );
+
     files
 }
