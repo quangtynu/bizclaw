@@ -2254,9 +2254,10 @@ function ChatWidget() {
 }
 
 export function App() {
-  console.log('[App] ===== RENDER START =====');
-  const [currentPage, setPage] = useState('dashboard');
-  console.log('[App] currentPage =', currentPage);
+  // NAVIGATION: Use window.__bizclaw_page + top-level re-render
+  // instead of useState, because Preact's __d flag gets stuck
+  // making setState silently fail to trigger re-renders.
+  const currentPage = window.__bizclaw_page || 'dashboard';
   const [lang, setLang] = useState(localStorage.getItem('bizclaw_lang') || 'vi');
   const [wsStatus, setWsStatus] = useState('disconnected');
   const [config, setConfig] = useState({});
@@ -2350,34 +2351,26 @@ export function App() {
     const handlePop = () => {
       const path = location.pathname.replace(/^\//, '').replace(/\/$/, '');
       const validPages = PAGES.filter(p => !p.sep).map(p => p.id);
-      setPage(validPages.includes(path) ? path : 'dashboard');
+      window.__bizclaw_page = validPages.includes(path) ? path : 'dashboard';
+      if (window.__bizclaw_rerender) window.__bizclaw_rerender();
     };
     window.addEventListener('popstate', handlePop);
-    // Route from initial URL
-    handlePop();
+    // Set initial page from URL (don't re-render, we're already rendering)
+    const path = location.pathname.replace(/^\//, '').replace(/\/$/, '');
+    const validPages = PAGES.filter(p => !p.sep).map(p => p.id);
+    window.__bizclaw_page = validPages.includes(path) ? path : 'dashboard';
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
+  // Navigate: set page globally and force re-render from top
   const navigate = useCallback((pageId) => {
-    console.log('[navigate] called with pageId =', pageId);
-    // WORKAROUND: Preact's __d (dirty) flag can get stuck after render errors,
-    // causing subsequent useState setters to silently skip re-rendering.
-    // We use this hack: find the component instance and force-clear __d,
-    // then call setPage, which properly enqueues a re-render.
-    const appEl = document.getElementById('app');
-    if (appEl && appEl.__k) {
-      const vn = appEl.__k;
-      const comp = vn && vn.__c;
-      if (comp && comp.__d) {
-        console.log('[navigate] Clearing stuck __d flag');
-        comp.__d = false;
-      }
-    }
-    setPage(pageId);
+    window.__bizclaw_page = pageId;
     const path = '/' + (pageId === 'dashboard' ? '' : pageId);
     if (location.pathname !== path) {
       history.pushState({ page: pageId }, '', path);
     }
+    // Force full re-render bypassing Preact's stuck queue
+    if (window.__bizclaw_rerender) window.__bizclaw_rerender();
   }, []);
 
   // Global navigate — must be set AFTER navigate is created
