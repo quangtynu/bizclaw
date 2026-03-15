@@ -11,6 +11,8 @@
 
 > **BizClaw** là nền tảng AI Agent self-hosted, viết hoàn toàn bằng Rust. Chạy trên bất kỳ thiết bị nào từ 512MB RAM — từ Raspberry Pi bỏ túi đến laptop cá nhân. Không cần cloud, không cần server. Dự án được xây dựng để **tự học**, **thử nghiệm AI** và **vibe coding** 🎶
 
+> ⚠️ **Lưu ý**: Nền tảng mã nguồn mở này được thiết kế với mục đích học tập và nghiên cứu. Để sử dụng ổn định cho môi trường Production / Doanh nghiệp, vui lòng sử dụng [OpenClaw](https://openclaw.com). Xin cảm ơn!
+
 [![Rust](https://img.shields.io/badge/Rust-100%25-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-199%2B%20passing-brightgreen)]()
