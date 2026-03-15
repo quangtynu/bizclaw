@@ -1064,17 +1064,19 @@ function renderTenantList(tenants){
   }
   document.getElementById('tenants-list').innerHTML=tenants.map(t=>{
     const subUrl = `${proto}//${escapeHtml(t.slug)}.${baseDomain}`;
+    // M5 FIX: Auto-login to tenant using admin token
+    const dashUrl = authToken ? `${subUrl}?token=${encodeURIComponent(authToken)}` : subUrl;
     return `<div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
           <strong>${escapeHtml(t.name)}</strong> <span class="badge ${t.status}">${t.status}</span>
           <div class="tenant-slug" style="margin-top:4px">
-            <a href="${subUrl}" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:500">🔗 ${escapeHtml(t.slug)}.${baseDomain}</a>
+            <a href="${dashUrl}" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:500">🔗 ${escapeHtml(t.slug)}.${baseDomain}</a>
             · ${providerBadge(t.provider,t.model)} · <span style="color:var(--muted);font-size:11px">${escapeHtml(t.plan)}</span>
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <a href="${subUrl}" target="_blank" class="btn btn-primary btn-sm" title="Mở Dashboard cấu hình" style="text-decoration:none">🔗 Dashboard</a>
+          <a href="${dashUrl}" target="_blank" class="btn btn-primary btn-sm" title="Mở Dashboard cấu hình" style="text-decoration:none">🔗 Dashboard</a>
           ${t.status!=='running'
             ?`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();tenantAction('${t.id}','start')">▶ Start</button>`
             :`<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();tenantAction('${t.id}','stop')">⏹ Stop</button>`}
